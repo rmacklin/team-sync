@@ -3622,7 +3622,7 @@ function run() {
             core.debug(`Fetching team data from ${teamDataPath}`);
             const teams = yield getTeamData(client, teamDataPath);
             core.debug(`teams: ${JSON.stringify(teams)}`);
-            yield synchronizeTeamData(client, org, teams);
+            yield synchronizeTeamData(client, org, authenticatedUser, teams);
         }
         catch (error) {
             core.error(error);
@@ -3630,7 +3630,7 @@ function run() {
         }
     });
 }
-function synchronizeTeamData(client, org, teams) {
+function synchronizeTeamData(client, org, authenticatedUser, teams) {
     return __awaiter(this, void 0, void 0, function* () {
         for (const teamName of Object.keys(teams)) {
             const teamSlug = slugify_1.default(teamName, { decamelize: false });
@@ -3643,9 +3643,21 @@ function synchronizeTeamData(client, org, teams) {
                 core.debug(JSON.stringify(existingMembers));
             }
             else {
-                core.debug(`No team was found in ${org} with slug ${teamSlug}.`);
+                core.debug(`No team was found in ${org} with slug ${teamSlug}. Creating one.`);
+                yield createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser);
             }
         }
+    });
+}
+function createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser) {
+    return __awaiter(this, void 0, void 0, function* () {
+        yield client.teams.create({ org, name: teamName, privacy: 'closed' });
+        core.debug(`Removing creator (${authenticatedUser}) from ${teamSlug}`);
+        yield client.teams.removeMembershipInOrg({
+            org,
+            team_slug: teamSlug,
+            username: authenticatedUser
+        });
     });
 }
 function getExistingTeamAndMembers(client, org, teamSlug) {
