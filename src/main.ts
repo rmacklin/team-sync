@@ -35,8 +35,9 @@ async function synchronizeTeamData(
 ): Promise<void> {
   for (const teamName of Object.keys(teams)) {
     const teamSlug = slugify(teamName, {decamelize: false})
-    const description = teams[teamName].description
-    const desiredMembers: string[] = teams[teamName].members.map((m: any) => m.github)
+    const teamData = teams[teamName]
+    const description = teamData.description
+    const desiredMembers: string[] = teamData.members.map((m: any) => m.github)
 
     core.debug(`Desired team members for team slug ${teamSlug}:`)
     core.debug(JSON.stringify(desiredMembers))
