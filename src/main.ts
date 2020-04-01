@@ -46,19 +46,30 @@ async function synchronizeTeamData(
       core.debug(`Existing team members for team slug ${teamSlug}:`)
       core.debug(JSON.stringify(existingMembers))
 
-      for (const username of existingMembers) {
-        if (!desiredMembers.includes(username)) {
-          core.debug(`Removing ${username} from ${teamSlug}`)
-        } else {
-          core.debug(`Keeping ${username} in ${teamSlug}`)
-        }
-      }
+      await removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers)
     } else {
       core.debug(`No team was found in ${org} with slug ${teamSlug}. Creating one.`)
       await createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser)
     }
 
     await addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers)
+  }
+}
+
+async function removeFormerTeamMembers(
+  client: github.GitHub,
+  org: string,
+  teamSlug: string,
+  existingMembers: string[],
+  desiredMembers: string[]
+): Promise<void> {
+  for (const username of existingMembers) {
+    if (!desiredMembers.includes(username)) {
+      core.debug(`Removing ${username} from ${teamSlug}`)
+      await client.teams.removeMembershipInOrg({org, team_slug: teamSlug, username})
+    } else {
+      core.debug(`Keeping ${username} in ${teamSlug}`)
+    }
   }
 }
 
