@@ -3613,6 +3613,7 @@ function run() {
         try {
             const token = core.getInput('repo-token', { required: true });
             const teamDataPath = core.getInput('team-data-path');
+            const teamNamePrefix = core.getInput('prefix-teams-with');
             const client = new github.GitHub(token);
             const org = github.context.repo.owner;
             core.debug('Fetching authenticated user');
@@ -3622,7 +3623,7 @@ function run() {
             core.debug(`Fetching team data from ${teamDataPath}`);
             const teams = yield getTeamData(client, teamDataPath);
             core.debug(`teams: ${JSON.stringify(teams)}`);
-            yield synchronizeTeamData(client, org, authenticatedUser, teams);
+            yield synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix);
         }
         catch (error) {
             core.error(error);
@@ -3630,11 +3631,12 @@ function run() {
         }
     });
 }
-function synchronizeTeamData(client, org, authenticatedUser, teams) {
+function synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix) {
     return __awaiter(this, void 0, void 0, function* () {
-        for (const teamName of Object.keys(teams)) {
+        for (const unprefixedTeamName of Object.keys(teams)) {
+            const teamName = prefixName(unprefixedTeamName, teamNamePrefix);
             const teamSlug = slugify_1.default(teamName, { decamelize: false });
-            const teamData = teams[teamName];
+            const teamData = teams[unprefixedTeamName];
             const description = teamData.description;
             const desiredMembers = teamData.members.map((m) => m.github);
             core.debug(`Desired team members for team slug ${teamSlug}:`);
@@ -3653,6 +3655,10 @@ function synchronizeTeamData(client, org, authenticatedUser, teams) {
             yield addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
         }
     });
+}
+function prefixName(unprefixedName, prefix) {
+    const trimmedPrefix = prefix.trim();
+    return trimmedPrefix === '' ? unprefixedName : `${trimmedPrefix} ${unprefixedName}`;
 }
 function removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers) {
     return __awaiter(this, void 0, void 0, function* () {
