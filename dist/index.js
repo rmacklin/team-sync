@@ -1975,6 +1975,25 @@ module.exports = windowsRelease;
 
 /***/ }),
 
+/***/ 79:
+/***/ (function(module) {
+
+"use strict";
+
+
+const matchOperatorsRegex = /[|\\{}()[\]^$+*?.-]/g;
+
+module.exports = string => {
+	if (typeof string !== 'string') {
+		throw new TypeError('Expected a string');
+	}
+
+	return string.replace(matchOperatorsRegex, '\\$&');
+};
+
+
+/***/ }),
+
 /***/ 87:
 /***/ (function(module) {
 
@@ -3355,6 +3374,81 @@ module.exports = opts => {
 
 /***/ }),
 
+/***/ 178:
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+const escapeStringRegexp = __webpack_require__(79);
+const transliterate = __webpack_require__(648);
+const builtinOverridableReplacements = __webpack_require__(272);
+
+const decamelize = string => {
+	return string
+		// Separate capitalized words.
+		.replace(/([A-Z]{2,})([a-z\d]+)/g, '$1 $2')
+		.replace(/([a-z\d]+)([A-Z]{2,})/g, '$1 $2')
+
+		.replace(/([a-z\d])([A-Z])/g, '$1 $2')
+		.replace(/([A-Z]+)([A-Z][a-z\d]+)/g, '$1 $2');
+};
+
+const removeMootSeparators = (string, separator) => {
+	const escapedSeparator = escapeStringRegexp(separator);
+
+	return string
+		.replace(new RegExp(`${escapedSeparator}{2,}`, 'g'), separator)
+		.replace(new RegExp(`^${escapedSeparator}|${escapedSeparator}$`, 'g'), '');
+};
+
+module.exports = (string, options) => {
+	if (typeof string !== 'string') {
+		throw new TypeError(`Expected a string, got \`${typeof string}\``);
+	}
+
+	options = {
+		separator: '-',
+		lowercase: true,
+		decamelize: true,
+		customReplacements: [],
+		preserveLeadingUnderscore: false,
+		...options
+	};
+
+	const shouldPrependUnderscore = options.preserveLeadingUnderscore && string.startsWith('_');
+
+	const customReplacements = new Map([
+		...builtinOverridableReplacements,
+		...options.customReplacements
+	]);
+
+	string = transliterate(string, {customReplacements});
+
+	if (options.decamelize) {
+		string = decamelize(string);
+	}
+
+	let patternSlug = /[^a-zA-Z\d]+/g;
+
+	if (options.lowercase) {
+		string = string.toLowerCase();
+		patternSlug = /[^a-z\d]+/g;
+	}
+
+	string = string.replace(patternSlug, options.separator);
+	string = string.replace(/\\/g, '');
+	string = removeMootSeparators(string, options.separator);
+
+	if (shouldPrependUnderscore) {
+		string = `_${string}`;
+	}
+
+	return string;
+};
+
+
+/***/ }),
+
 /***/ 190:
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -3507,15 +3601,20 @@ var __importStar = (this && this.__importStar) || function (mod) {
     result["default"] = mod;
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const core = __importStar(__webpack_require__(470));
 const github = __importStar(__webpack_require__(469));
+const slugify_1 = __importDefault(__webpack_require__(178));
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const token = core.getInput('repo-token', { required: true });
             const teamDataPath = core.getInput('team-data-path');
             const client = new github.GitHub(token);
+            const org = github.context.repo.owner;
             core.debug('Fetching authenticated user');
             const authenticatedUserResponse = yield client.users.getAuthenticated();
             const authenticatedUser = authenticatedUserResponse.data.login;
@@ -3523,11 +3622,46 @@ function run() {
             core.debug(`Fetching team data from ${teamDataPath}`);
             const teams = yield getTeamData(client, teamDataPath);
             core.debug(`teams: ${JSON.stringify(teams)}`);
+            yield synchronizeTeamData(client, org, teams);
         }
         catch (error) {
             core.error(error);
             core.setFailed(error.message);
         }
+    });
+}
+function synchronizeTeamData(client, org, teams) {
+    return __awaiter(this, void 0, void 0, function* () {
+        for (const teamName of Object.keys(teams)) {
+            const teamSlug = slugify_1.default(teamName, { decamelize: false });
+            const desiredMembers = teams[teamName].members.map((m) => m.github);
+            core.debug(`Desired team members for team slug ${teamSlug}:`);
+            core.debug(JSON.stringify(desiredMembers));
+            const { existingTeam, existingMembers } = yield getExistingTeamAndMembers(client, org, teamSlug);
+            if (existingTeam) {
+                core.debug(`Existing team members for team slug ${teamSlug}:`);
+                core.debug(JSON.stringify(existingMembers));
+            }
+            else {
+                core.debug(`No team was found in ${org} with slug ${teamSlug}.`);
+            }
+        }
+    });
+}
+function getExistingTeamAndMembers(client, org, teamSlug) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let existingTeam;
+        let existingMembers = [];
+        try {
+            const teamResponse = yield client.teams.getByName({ org, team_slug: teamSlug });
+            existingTeam = teamResponse.data;
+            const membersResponse = yield client.teams.listMembersInOrg({ org, team_slug: teamSlug });
+            existingMembers = membersResponse.data.map(m => m.login);
+        }
+        catch (error) {
+            existingTeam = null;
+        }
+        return { existingTeam, existingMembers };
     });
 }
 function getTeamData(client, teamDataPath) {
@@ -3586,6 +3720,270 @@ exports.getUserAgent = getUserAgent;
 /***/ (function(module) {
 
 module.exports = {"_from":"@octokit/rest@^16.43.1","_id":"@octokit/rest@16.43.1","_inBundle":false,"_integrity":"sha512-gfFKwRT/wFxq5qlNjnW2dh+qh74XgTQ2B179UX5K1HYCluioWj8Ndbgqw2PVqa1NnVJkGHp2ovMpVn/DImlmkw==","_location":"/@octokit/rest","_phantomChildren":{"@octokit/types":"2.5.1","deprecation":"2.3.1","once":"1.4.0"},"_requested":{"type":"range","registry":true,"raw":"@octokit/rest@^16.43.1","name":"@octokit/rest","escapedName":"@octokit%2frest","scope":"@octokit","rawSpec":"^16.43.1","saveSpec":null,"fetchSpec":"^16.43.1"},"_requiredBy":["/@actions/github"],"_resolved":"https://registry.npmjs.org/@octokit/rest/-/rest-16.43.1.tgz","_shasum":"3b11e7d1b1ac2bbeeb23b08a17df0b20947eda6b","_spec":"@octokit/rest@^16.43.1","_where":"/Users/richard/src/git/open_source/team-sync/node_modules/@actions/github","author":{"name":"Gregor Martynus","url":"https://github.com/gr2m"},"bugs":{"url":"https://github.com/octokit/rest.js/issues"},"bundleDependencies":false,"bundlesize":[{"path":"./dist/octokit-rest.min.js.gz","maxSize":"33 kB"}],"contributors":[{"name":"Mike de Boer","email":"info@mikedeboer.nl"},{"name":"Fabian Jakobs","email":"fabian@c9.io"},{"name":"Joe Gallo","email":"joe@brassafrax.com"},{"name":"Gregor Martynus","url":"https://github.com/gr2m"}],"dependencies":{"@octokit/auth-token":"^2.4.0","@octokit/plugin-paginate-rest":"^1.1.1","@octokit/plugin-request-log":"^1.0.0","@octokit/plugin-rest-endpoint-methods":"2.4.0","@octokit/request":"^5.2.0","@octokit/request-error":"^1.0.2","atob-lite":"^2.0.0","before-after-hook":"^2.0.0","btoa-lite":"^1.0.0","deprecation":"^2.0.0","lodash.get":"^4.4.2","lodash.set":"^4.3.2","lodash.uniq":"^4.5.0","octokit-pagination-methods":"^1.1.0","once":"^1.4.0","universal-user-agent":"^4.0.0"},"deprecated":false,"description":"GitHub REST API client for Node.js","devDependencies":{"@gimenete/type-writer":"^0.1.3","@octokit/auth":"^1.1.1","@octokit/fixtures-server":"^5.0.6","@octokit/graphql":"^4.2.0","@types/node":"^13.1.0","bundlesize":"^0.18.0","chai":"^4.1.2","compression-webpack-plugin":"^3.1.0","cypress":"^3.0.0","glob":"^7.1.2","http-proxy-agent":"^4.0.0","lodash.camelcase":"^4.3.0","lodash.merge":"^4.6.1","lodash.upperfirst":"^4.3.1","lolex":"^5.1.2","mkdirp":"^1.0.0","mocha":"^7.0.1","mustache":"^4.0.0","nock":"^11.3.3","npm-run-all":"^4.1.2","nyc":"^15.0.0","prettier":"^1.14.2","proxy":"^1.0.0","semantic-release":"^17.0.0","sinon":"^8.0.0","sinon-chai":"^3.0.0","sort-keys":"^4.0.0","string-to-arraybuffer":"^1.0.0","string-to-jsdoc-comment":"^1.0.0","typescript":"^3.3.1","webpack":"^4.0.0","webpack-bundle-analyzer":"^3.0.0","webpack-cli":"^3.0.0"},"files":["index.js","index.d.ts","lib","plugins"],"homepage":"https://github.com/octokit/rest.js#readme","keywords":["octokit","github","rest","api-client"],"license":"MIT","name":"@octokit/rest","nyc":{"ignore":["test"]},"publishConfig":{"access":"public"},"release":{"publish":["@semantic-release/npm",{"path":"@semantic-release/github","assets":["dist/*","!dist/*.map.gz"]}]},"repository":{"type":"git","url":"git+https://github.com/octokit/rest.js.git"},"scripts":{"build":"npm-run-all build:*","build:browser":"npm-run-all build:browser:*","build:browser:development":"webpack --mode development --entry . --output-library=Octokit --output=./dist/octokit-rest.js --profile --json > dist/bundle-stats.json","build:browser:production":"webpack --mode production --entry . --plugin=compression-webpack-plugin --output-library=Octokit --output-path=./dist --output-filename=octokit-rest.min.js --devtool source-map","build:ts":"npm run -s update-endpoints:typescript","coverage":"nyc report --reporter=html && open coverage/index.html","generate-bundle-report":"webpack-bundle-analyzer dist/bundle-stats.json --mode=static --no-open --report dist/bundle-report.html","lint":"prettier --check '{lib,plugins,scripts,test}/**/*.{js,json,ts}' 'docs/*.{js,json}' 'docs/src/**/*' index.js README.md package.json","lint:fix":"prettier --write '{lib,plugins,scripts,test}/**/*.{js,json,ts}' 'docs/*.{js,json}' 'docs/src/**/*' index.js README.md package.json","postvalidate:ts":"tsc --noEmit --target es6 test/typescript-validate.ts","prebuild:browser":"mkdirp dist/","pretest":"npm run -s lint","prevalidate:ts":"npm run -s build:ts","start-fixtures-server":"octokit-fixtures-server","test":"nyc mocha test/mocha-node-setup.js \"test/*/**/*-test.js\"","test:browser":"cypress run --browser chrome","update-endpoints":"npm-run-all update-endpoints:*","update-endpoints:fetch-json":"node scripts/update-endpoints/fetch-json","update-endpoints:typescript":"node scripts/update-endpoints/typescript","validate:ts":"tsc --target es6 --noImplicitAny index.d.ts"},"types":"index.d.ts","version":"16.43.1"};
+
+/***/ }),
+
+/***/ 257:
+/***/ (function(module) {
+
+/**
+ * lodash (Custom Build) <https://lodash.com/>
+ * Build: `lodash modularize exports="npm" -o ./`
+ * Copyright jQuery Foundation and other contributors <https://jquery.org/>
+ * Released under MIT license <https://lodash.com/license>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ */
+
+/** Used as references for various `Number` constants. */
+var INFINITY = 1 / 0;
+
+/** `Object#toString` result references. */
+var symbolTag = '[object Symbol]';
+
+/** Used to match Latin Unicode letters (excluding mathematical operators). */
+var reLatin = /[\xc0-\xd6\xd8-\xf6\xf8-\xff\u0100-\u017f]/g;
+
+/** Used to compose unicode character classes. */
+var rsComboMarksRange = '\\u0300-\\u036f\\ufe20-\\ufe23',
+    rsComboSymbolsRange = '\\u20d0-\\u20f0';
+
+/** Used to compose unicode capture groups. */
+var rsCombo = '[' + rsComboMarksRange + rsComboSymbolsRange + ']';
+
+/**
+ * Used to match [combining diacritical marks](https://en.wikipedia.org/wiki/Combining_Diacritical_Marks) and
+ * [combining diacritical marks for symbols](https://en.wikipedia.org/wiki/Combining_Diacritical_Marks_for_Symbols).
+ */
+var reComboMark = RegExp(rsCombo, 'g');
+
+/** Used to map Latin Unicode letters to basic Latin letters. */
+var deburredLetters = {
+  // Latin-1 Supplement block.
+  '\xc0': 'A',  '\xc1': 'A', '\xc2': 'A', '\xc3': 'A', '\xc4': 'A', '\xc5': 'A',
+  '\xe0': 'a',  '\xe1': 'a', '\xe2': 'a', '\xe3': 'a', '\xe4': 'a', '\xe5': 'a',
+  '\xc7': 'C',  '\xe7': 'c',
+  '\xd0': 'D',  '\xf0': 'd',
+  '\xc8': 'E',  '\xc9': 'E', '\xca': 'E', '\xcb': 'E',
+  '\xe8': 'e',  '\xe9': 'e', '\xea': 'e', '\xeb': 'e',
+  '\xcc': 'I',  '\xcd': 'I', '\xce': 'I', '\xcf': 'I',
+  '\xec': 'i',  '\xed': 'i', '\xee': 'i', '\xef': 'i',
+  '\xd1': 'N',  '\xf1': 'n',
+  '\xd2': 'O',  '\xd3': 'O', '\xd4': 'O', '\xd5': 'O', '\xd6': 'O', '\xd8': 'O',
+  '\xf2': 'o',  '\xf3': 'o', '\xf4': 'o', '\xf5': 'o', '\xf6': 'o', '\xf8': 'o',
+  '\xd9': 'U',  '\xda': 'U', '\xdb': 'U', '\xdc': 'U',
+  '\xf9': 'u',  '\xfa': 'u', '\xfb': 'u', '\xfc': 'u',
+  '\xdd': 'Y',  '\xfd': 'y', '\xff': 'y',
+  '\xc6': 'Ae', '\xe6': 'ae',
+  '\xde': 'Th', '\xfe': 'th',
+  '\xdf': 'ss',
+  // Latin Extended-A block.
+  '\u0100': 'A',  '\u0102': 'A', '\u0104': 'A',
+  '\u0101': 'a',  '\u0103': 'a', '\u0105': 'a',
+  '\u0106': 'C',  '\u0108': 'C', '\u010a': 'C', '\u010c': 'C',
+  '\u0107': 'c',  '\u0109': 'c', '\u010b': 'c', '\u010d': 'c',
+  '\u010e': 'D',  '\u0110': 'D', '\u010f': 'd', '\u0111': 'd',
+  '\u0112': 'E',  '\u0114': 'E', '\u0116': 'E', '\u0118': 'E', '\u011a': 'E',
+  '\u0113': 'e',  '\u0115': 'e', '\u0117': 'e', '\u0119': 'e', '\u011b': 'e',
+  '\u011c': 'G',  '\u011e': 'G', '\u0120': 'G', '\u0122': 'G',
+  '\u011d': 'g',  '\u011f': 'g', '\u0121': 'g', '\u0123': 'g',
+  '\u0124': 'H',  '\u0126': 'H', '\u0125': 'h', '\u0127': 'h',
+  '\u0128': 'I',  '\u012a': 'I', '\u012c': 'I', '\u012e': 'I', '\u0130': 'I',
+  '\u0129': 'i',  '\u012b': 'i', '\u012d': 'i', '\u012f': 'i', '\u0131': 'i',
+  '\u0134': 'J',  '\u0135': 'j',
+  '\u0136': 'K',  '\u0137': 'k', '\u0138': 'k',
+  '\u0139': 'L',  '\u013b': 'L', '\u013d': 'L', '\u013f': 'L', '\u0141': 'L',
+  '\u013a': 'l',  '\u013c': 'l', '\u013e': 'l', '\u0140': 'l', '\u0142': 'l',
+  '\u0143': 'N',  '\u0145': 'N', '\u0147': 'N', '\u014a': 'N',
+  '\u0144': 'n',  '\u0146': 'n', '\u0148': 'n', '\u014b': 'n',
+  '\u014c': 'O',  '\u014e': 'O', '\u0150': 'O',
+  '\u014d': 'o',  '\u014f': 'o', '\u0151': 'o',
+  '\u0154': 'R',  '\u0156': 'R', '\u0158': 'R',
+  '\u0155': 'r',  '\u0157': 'r', '\u0159': 'r',
+  '\u015a': 'S',  '\u015c': 'S', '\u015e': 'S', '\u0160': 'S',
+  '\u015b': 's',  '\u015d': 's', '\u015f': 's', '\u0161': 's',
+  '\u0162': 'T',  '\u0164': 'T', '\u0166': 'T',
+  '\u0163': 't',  '\u0165': 't', '\u0167': 't',
+  '\u0168': 'U',  '\u016a': 'U', '\u016c': 'U', '\u016e': 'U', '\u0170': 'U', '\u0172': 'U',
+  '\u0169': 'u',  '\u016b': 'u', '\u016d': 'u', '\u016f': 'u', '\u0171': 'u', '\u0173': 'u',
+  '\u0174': 'W',  '\u0175': 'w',
+  '\u0176': 'Y',  '\u0177': 'y', '\u0178': 'Y',
+  '\u0179': 'Z',  '\u017b': 'Z', '\u017d': 'Z',
+  '\u017a': 'z',  '\u017c': 'z', '\u017e': 'z',
+  '\u0132': 'IJ', '\u0133': 'ij',
+  '\u0152': 'Oe', '\u0153': 'oe',
+  '\u0149': "'n", '\u017f': 'ss'
+};
+
+/** Detect free variable `global` from Node.js. */
+var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
+
+/** Detect free variable `self`. */
+var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
+
+/** Used as a reference to the global object. */
+var root = freeGlobal || freeSelf || Function('return this')();
+
+/**
+ * The base implementation of `_.propertyOf` without support for deep paths.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @returns {Function} Returns the new accessor function.
+ */
+function basePropertyOf(object) {
+  return function(key) {
+    return object == null ? undefined : object[key];
+  };
+}
+
+/**
+ * Used by `_.deburr` to convert Latin-1 Supplement and Latin Extended-A
+ * letters to basic Latin letters.
+ *
+ * @private
+ * @param {string} letter The matched letter to deburr.
+ * @returns {string} Returns the deburred letter.
+ */
+var deburrLetter = basePropertyOf(deburredLetters);
+
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var objectToString = objectProto.toString;
+
+/** Built-in value references. */
+var Symbol = root.Symbol;
+
+/** Used to convert symbols to primitives and strings. */
+var symbolProto = Symbol ? Symbol.prototype : undefined,
+    symbolToString = symbolProto ? symbolProto.toString : undefined;
+
+/**
+ * The base implementation of `_.toString` which doesn't convert nullish
+ * values to empty strings.
+ *
+ * @private
+ * @param {*} value The value to process.
+ * @returns {string} Returns the string.
+ */
+function baseToString(value) {
+  // Exit early for strings to avoid a performance hit in some environments.
+  if (typeof value == 'string') {
+    return value;
+  }
+  if (isSymbol(value)) {
+    return symbolToString ? symbolToString.call(value) : '';
+  }
+  var result = (value + '');
+  return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result;
+}
+
+/**
+ * Checks if `value` is object-like. A value is object-like if it's not `null`
+ * and has a `typeof` result of "object".
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ * @example
+ *
+ * _.isObjectLike({});
+ * // => true
+ *
+ * _.isObjectLike([1, 2, 3]);
+ * // => true
+ *
+ * _.isObjectLike(_.noop);
+ * // => false
+ *
+ * _.isObjectLike(null);
+ * // => false
+ */
+function isObjectLike(value) {
+  return !!value && typeof value == 'object';
+}
+
+/**
+ * Checks if `value` is classified as a `Symbol` primitive or object.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a symbol, else `false`.
+ * @example
+ *
+ * _.isSymbol(Symbol.iterator);
+ * // => true
+ *
+ * _.isSymbol('abc');
+ * // => false
+ */
+function isSymbol(value) {
+  return typeof value == 'symbol' ||
+    (isObjectLike(value) && objectToString.call(value) == symbolTag);
+}
+
+/**
+ * Converts `value` to a string. An empty string is returned for `null`
+ * and `undefined` values. The sign of `-0` is preserved.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to process.
+ * @returns {string} Returns the string.
+ * @example
+ *
+ * _.toString(null);
+ * // => ''
+ *
+ * _.toString(-0);
+ * // => '-0'
+ *
+ * _.toString([1, 2, 3]);
+ * // => '1,2,3'
+ */
+function toString(value) {
+  return value == null ? '' : baseToString(value);
+}
+
+/**
+ * Deburrs `string` by converting
+ * [Latin-1 Supplement](https://en.wikipedia.org/wiki/Latin-1_Supplement_(Unicode_block)#Character_table)
+ * and [Latin Extended-A](https://en.wikipedia.org/wiki/Latin_Extended-A)
+ * letters to basic Latin letters and removing
+ * [combining diacritical marks](https://en.wikipedia.org/wiki/Combining_Diacritical_Marks).
+ *
+ * @static
+ * @memberOf _
+ * @since 3.0.0
+ * @category String
+ * @param {string} [string=''] The string to deburr.
+ * @returns {string} Returns the deburred string.
+ * @example
+ *
+ * _.deburr('déjà vu');
+ * // => 'deja vu'
+ */
+function deburr(string) {
+  string = toString(string);
+  return string && string.replace(reLatin, deburrLetter).replace(reComboMark, '');
+}
+
+module.exports = deburr;
+
 
 /***/ }),
 
@@ -3847,6 +4245,21 @@ function applyAcceptHeader (res, headers) {
 
   return headers
 }
+
+
+/***/ }),
+
+/***/ 272:
+/***/ (function(module) {
+
+"use strict";
+
+
+module.exports = [
+	['&', ' and '],
+	['🦄', ' unicorn '],
+	['♥', ' love ']
+];
 
 
 /***/ }),
@@ -6644,6 +7057,765 @@ module.exports = require("stream");
 
 /***/ }),
 
+/***/ 419:
+/***/ (function(module) {
+
+"use strict";
+
+
+module.exports = [
+	// German umlauts
+	['ß', 'ss'],
+	['ä', 'ae'],
+	['Ä', 'Ae'],
+	['ö', 'oe'],
+	['Ö', 'Oe'],
+	['ü', 'ue'],
+	['Ü', 'Ue'],
+
+	// Latin
+	['À', 'A'],
+	['Á', 'A'],
+	['Â', 'A'],
+	['Ã', 'A'],
+	['Ä', 'Ae'],
+	['Å', 'A'],
+	['Æ', 'AE'],
+	['Ç', 'C'],
+	['È', 'E'],
+	['É', 'E'],
+	['Ê', 'E'],
+	['Ë', 'E'],
+	['Ì', 'I'],
+	['Í', 'I'],
+	['Î', 'I'],
+	['Ï', 'I'],
+	['Ð', 'D'],
+	['Ñ', 'N'],
+	['Ò', 'O'],
+	['Ó', 'O'],
+	['Ô', 'O'],
+	['Õ', 'O'],
+	['Ö', 'Oe'],
+	['Ő', 'O'],
+	['Ø', 'O'],
+	['Ù', 'U'],
+	['Ú', 'U'],
+	['Û', 'U'],
+	['Ü', 'Ue'],
+	['Ű', 'U'],
+	['Ý', 'Y'],
+	['Þ', 'TH'],
+	['ß', 'ss'],
+	['à', 'a'],
+	['á', 'a'],
+	['â', 'a'],
+	['ã', 'a'],
+	['ä', 'ae'],
+	['å', 'a'],
+	['æ', 'ae'],
+	['ç', 'c'],
+	['è', 'e'],
+	['é', 'e'],
+	['ê', 'e'],
+	['ë', 'e'],
+	['ì', 'i'],
+	['í', 'i'],
+	['î', 'i'],
+	['ï', 'i'],
+	['ð', 'd'],
+	['ñ', 'n'],
+	['ò', 'o'],
+	['ó', 'o'],
+	['ô', 'o'],
+	['õ', 'o'],
+	['ö', 'oe'],
+	['ő', 'o'],
+	['ø', 'o'],
+	['ù', 'u'],
+	['ú', 'u'],
+	['û', 'u'],
+	['ü', 'ue'],
+	['ű', 'u'],
+	['ý', 'y'],
+	['þ', 'th'],
+	['ÿ', 'y'],
+	['ẞ', 'SS'],
+
+	// Vietnamese
+	['à', 'a'],
+	['À', 'A'],
+	['á', 'a'],
+	['Á', 'A'],
+	['â', 'a'],
+	['Â', 'A'],
+	['ã', 'a'],
+	['Ã', 'A'],
+	['è', 'e'],
+	['È', 'E'],
+	['é', 'e'],
+	['É', 'E'],
+	['ê', 'e'],
+	['Ê', 'E'],
+	['ì', 'i'],
+	['Ì', 'I'],
+	['í', 'i'],
+	['Í', 'I'],
+	['ò', 'o'],
+	['Ò', 'O'],
+	['ó', 'o'],
+	['Ó', 'O'],
+	['ô', 'o'],
+	['Ô', 'O'],
+	['õ', 'o'],
+	['Õ', 'O'],
+	['ù', 'u'],
+	['Ù', 'U'],
+	['ú', 'u'],
+	['Ú', 'U'],
+	['ý', 'y'],
+	['Ý', 'Y'],
+	['ă', 'a'],
+	['Ă', 'A'],
+	['Đ', 'D'],
+	['đ', 'd'],
+	['ĩ', 'i'],
+	['Ĩ', 'I'],
+	['ũ', 'u'],
+	['Ũ', 'U'],
+	['ơ', 'o'],
+	['Ơ', 'O'],
+	['ư', 'u'],
+	['Ư', 'U'],
+	['ạ', 'a'],
+	['Ạ', 'A'],
+	['ả', 'a'],
+	['Ả', 'A'],
+	['ấ', 'a'],
+	['Ấ', 'A'],
+	['ầ', 'a'],
+	['Ầ', 'A'],
+	['ẩ', 'a'],
+	['Ẩ', 'A'],
+	['ẫ', 'a'],
+	['Ẫ', 'A'],
+	['ậ', 'a'],
+	['Ậ', 'A'],
+	['ắ', 'a'],
+	['Ắ', 'A'],
+	['ằ', 'a'],
+	['Ằ', 'A'],
+	['ẳ', 'a'],
+	['Ẳ', 'A'],
+	['ẵ', 'a'],
+	['Ẵ', 'A'],
+	['ặ', 'a'],
+	['Ặ', 'A'],
+	['ẹ', 'e'],
+	['Ẹ', 'E'],
+	['ẻ', 'e'],
+	['Ẻ', 'E'],
+	['ẽ', 'e'],
+	['Ẽ', 'E'],
+	['ế', 'e'],
+	['Ế', 'E'],
+	['ề', 'e'],
+	['Ề', 'E'],
+	['ể', 'e'],
+	['Ể', 'E'],
+	['ễ', 'e'],
+	['Ễ', 'E'],
+	['ệ', 'e'],
+	['Ệ', 'E'],
+	['ỉ', 'i'],
+	['Ỉ', 'I'],
+	['ị', 'i'],
+	['Ị', 'I'],
+	['ọ', 'o'],
+	['Ọ', 'O'],
+	['ỏ', 'o'],
+	['Ỏ', 'O'],
+	['ố', 'o'],
+	['Ố', 'O'],
+	['ồ', 'o'],
+	['Ồ', 'O'],
+	['ổ', 'o'],
+	['Ổ', 'O'],
+	['ỗ', 'o'],
+	['Ỗ', 'O'],
+	['ộ', 'o'],
+	['Ộ', 'O'],
+	['ớ', 'o'],
+	['Ớ', 'O'],
+	['ờ', 'o'],
+	['Ờ', 'O'],
+	['ở', 'o'],
+	['Ở', 'O'],
+	['ỡ', 'o'],
+	['Ỡ', 'O'],
+	['ợ', 'o'],
+	['Ợ', 'O'],
+	['ụ', 'u'],
+	['Ụ', 'U'],
+	['ủ', 'u'],
+	['Ủ', 'U'],
+	['ứ', 'u'],
+	['Ứ', 'U'],
+	['ừ', 'u'],
+	['Ừ', 'U'],
+	['ử', 'u'],
+	['Ử', 'U'],
+	['ữ', 'u'],
+	['Ữ', 'U'],
+	['ự', 'u'],
+	['Ự', 'U'],
+	['ỳ', 'y'],
+	['Ỳ', 'Y'],
+	['ỵ', 'y'],
+	['Ỵ', 'Y'],
+	['ỷ', 'y'],
+	['Ỷ', 'Y'],
+	['ỹ', 'y'],
+	['Ỹ', 'Y'],
+
+	// Arabic
+	['ء', 'e'],
+	['آ', 'a'],
+	['أ', 'a'],
+	['ؤ', 'w'],
+	['إ', 'i'],
+	['ئ', 'y'],
+	['ا', 'a'],
+	['ب', 'b'],
+	['ة', 't'],
+	['ت', 't'],
+	['ث', 'th'],
+	['ج', 'j'],
+	['ح', 'h'],
+	['خ', 'kh'],
+	['د', 'd'],
+	['ذ', 'dh'],
+	['ر', 'r'],
+	['ز', 'z'],
+	['س', 's'],
+	['ش', 'sh'],
+	['ص', 's'],
+	['ض', 'd'],
+	['ط', 't'],
+	['ظ', 'z'],
+	['ع', 'e'],
+	['غ', 'gh'],
+	['ـ', '_'],
+	['ف', 'f'],
+	['ق', 'q'],
+	['ك', 'k'],
+	['ل', 'l'],
+	['م', 'm'],
+	['ن', 'n'],
+	['ه', 'h'],
+	['و', 'w'],
+	['ى', 'a'],
+	['ي', 'y'],
+	['َ‎', 'a'],
+	['ُ', 'u'],
+	['ِ‎', 'i'],
+	['٠', '0'],
+	['١', '1'],
+	['٢', '2'],
+	['٣', '3'],
+	['٤', '4'],
+	['٥', '5'],
+	['٦', '6'],
+	['٧', '7'],
+	['٨', '8'],
+	['٩', '9'],
+
+	// Persian / Farsi
+	['چ', 'ch'],
+	['ک', 'k'],
+	['گ', 'g'],
+	['پ', 'p'],
+	['ژ', 'zh'],
+	['ی', 'y'],
+	['۰', '0'],
+	['۱', '1'],
+	['۲', '2'],
+	['۳', '3'],
+	['۴', '4'],
+	['۵', '5'],
+	['۶', '6'],
+	['۷', '7'],
+	['۸', '8'],
+	['۹', '9'],
+
+	// Pashto
+	['ټ', 'p'],
+	['ځ', 'z'],
+	['څ', 'c'],
+	['ډ', 'd'],
+	['ﺫ', 'd'],
+	['ﺭ', 'r'],
+	['ړ', 'r'],
+	['ﺯ', 'z'],
+	['ږ', 'g'],
+	['ښ', 'x'],
+	['ګ', 'g'],
+	['ڼ', 'n'],
+	['ۀ', 'e'],
+	['ې', 'e'],
+	['ۍ', 'ai'],
+
+	// Urdu
+	['ٹ', 't'],
+	['ڈ', 'd'],
+	['ڑ', 'r'],
+	['ں', 'n'],
+	['ہ', 'h'],
+	['ھ', 'h'],
+	['ے', 'e'],
+
+	// Russian
+	['А', 'A'],
+	['а', 'a'],
+	['Б', 'B'],
+	['б', 'b'],
+	['В', 'V'],
+	['в', 'v'],
+	['Г', 'G'],
+	['г', 'g'],
+	['Д', 'D'],
+	['д', 'd'],
+	['Е', 'E'],
+	['е', 'e'],
+	['Ж', 'Zh'],
+	['ж', 'zh'],
+	['З', 'Z'],
+	['з', 'z'],
+	['И', 'I'],
+	['и', 'i'],
+	['Й', 'J'],
+	['й', 'j'],
+	['К', 'K'],
+	['к', 'k'],
+	['Л', 'L'],
+	['л', 'l'],
+	['М', 'M'],
+	['м', 'm'],
+	['Н', 'N'],
+	['н', 'n'],
+	['О', 'O'],
+	['о', 'o'],
+	['П', 'P'],
+	['п', 'p'],
+	['Р', 'R'],
+	['р', 'r'],
+	['С', 'S'],
+	['с', 's'],
+	['Т', 'T'],
+	['т', 't'],
+	['У', 'U'],
+	['у', 'u'],
+	['Ф', 'F'],
+	['ф', 'f'],
+	['Х', 'H'],
+	['х', 'h'],
+	['Ц', 'Cz'],
+	['ц', 'cz'],
+	['Ч', 'Ch'],
+	['ч', 'ch'],
+	['Ш', 'Sh'],
+	['ш', 'sh'],
+	['Щ', 'Shh'],
+	['щ', 'shh'],
+	['Ъ', ''],
+	['ъ', ''],
+	['Ы', 'Y'],
+	['ы', 'y'],
+	['Ь', ''],
+	['ь', ''],
+	['Э', 'E'],
+	['э', 'e'],
+	['Ю', 'Yu'],
+	['ю', 'yu'],
+	['Я', 'Ya'],
+	['я', 'ya'],
+	['Ё', 'Yo'],
+	['ё', 'yo'],
+
+	// Romanian
+	['ă', 'a'],
+	['Ă', 'A'],
+	['ș', 's'],
+	['Ș', 'S'],
+	['ț', 't'],
+	['Ț', 'T'],
+	['ţ', 't'],
+	['Ţ', 'T'],
+
+	// Turkish
+	['ş', 's'],
+	['Ş', 's'],
+	['ç', 'c'],
+	['Ç', 'c'],
+	['ğ', 'g'],
+	['Ğ', 'g'],
+	['ı', 'i'],
+	['İ', 'i'],
+
+	// Armenian
+	['ա', 'a'],
+	['բ', 'b'],
+	['գ', 'ɡ'],
+	['դ', 'd'],
+	['ե', 'ye'],
+	['զ', 'z'],
+	['է', 'e'],
+	['ը', 'u'],
+	['թ', 't'],
+	['ժ', 'zh'],
+	['ի', 'i'],
+	['լ', 'l'],
+	['խ', 'kh'],
+	['ծ', 'ts'],
+	['կ', 'k'],
+	['հ', 'h'],
+	['ձ', 'dz'],
+	['ղ', 'r'],
+	['ճ', 'j'],
+	['մ', 'm'],
+	['յ', 'j'],
+	['ն', 'n'],
+	['շ', 'sh'],
+	['ո', 'vo'],
+	['չ', 'ch'],
+	['պ', 'p'],
+	['ջ', 'j'],
+	['ռ', 'r'],
+	['ս', 's'],
+	['վ', 'v'],
+	['տ', 't'],
+	['ր', 're'],
+	['ց', 'ts'],
+	['ու', 'u'],
+	['ւ', 'v'],
+	['փ', 'p'],
+	['ք', 'q'],
+	['օ', 'o'],
+	['ֆ', 'f'],
+	['և', 'yev'],
+
+	// Georgian
+	['ა', 'a'],
+	['ბ', 'b'],
+	['გ', 'g'],
+	['დ', 'd'],
+	['ე', 'e'],
+	['ვ', 'v'],
+	['ზ', 'z'],
+	['თ', 't'],
+	['ი', 'i'],
+	['კ', 'k'],
+	['ლ', 'l'],
+	['მ', 'm'],
+	['ნ', 'n'],
+	['ო', 'o'],
+	['პ', 'p'],
+	['ჟ', 'zh'],
+	['რ', 'r'],
+	['ს', 's'],
+	['ტ', 't'],
+	['უ', 'u'],
+	['ფ', 'ph'],
+	['ქ', 'q'],
+	['ღ', 'gh'],
+	['ყ', 'k'],
+	['შ', 'sh'],
+	['ჩ', 'ch'],
+	['ც', 'ts'],
+	['ძ', 'dz'],
+	['წ', 'ts'],
+	['ჭ', 'tch'],
+	['ხ', 'kh'],
+	['ჯ', 'j'],
+	['ჰ', 'h'],
+
+	// Czech
+	['č', 'c'],
+	['ď', 'd'],
+	['ě', 'e'],
+	['ň', 'n'],
+	['ř', 'r'],
+	['š', 's'],
+	['ť', 't'],
+	['ů', 'u'],
+	['ž', 'z'],
+	['Č', 'C'],
+	['Ď', 'D'],
+	['Ě', 'E'],
+	['Ň', 'N'],
+	['Ř', 'R'],
+	['Š', 'S'],
+	['Ť', 'T'],
+	['Ů', 'U'],
+	['Ž', 'Z'],
+
+	// Dhivehi
+	['ހ', 'h'],
+	['ށ', 'sh'],
+	['ނ', 'n'],
+	['ރ', 'r'],
+	['ބ', 'b'],
+	['ޅ', 'lh'],
+	['ކ', 'k'],
+	['އ', 'a'],
+	['ވ', 'v'],
+	['މ', 'm'],
+	['ފ', 'f'],
+	['ދ', 'dh'],
+	['ތ', 'th'],
+	['ލ', 'l'],
+	['ގ', 'g'],
+	['ޏ', 'gn'],
+	['ސ', 's'],
+	['ޑ', 'd'],
+	['ޒ', 'z'],
+	['ޓ', 't'],
+	['ޔ', 'y'],
+	['ޕ', 'p'],
+	['ޖ', 'j'],
+	['ޗ', 'ch'],
+	['ޘ', 'tt'],
+	['ޙ', 'hh'],
+	['ޚ', 'kh'],
+	['ޛ', 'th'],
+	['ޜ', 'z'],
+	['ޝ', 'sh'],
+	['ޞ', 's'],
+	['ޟ', 'd'],
+	['ޠ', 't'],
+	['ޡ', 'z'],
+	['ޢ', 'a'],
+	['ޣ', 'gh'],
+	['ޤ', 'q'],
+	['ޥ', 'w'],
+	['ަ', 'a'],
+	['ާ', 'aa'],
+	['ި', 'i'],
+	['ީ', 'ee'],
+	['ު', 'u'],
+	['ޫ', 'oo'],
+	['ެ', 'e'],
+	['ޭ', 'ey'],
+	['ޮ', 'o'],
+	['ޯ', 'oa'],
+	['ް', ''],
+
+	// Greek
+	['α', 'a'],
+	['β', 'v'],
+	['γ', 'g'],
+	['δ', 'd'],
+	['ε', 'e'],
+	['ζ', 'z'],
+	['η', 'i'],
+	['θ', 'th'],
+	['ι', 'i'],
+	['κ', 'k'],
+	['λ', 'l'],
+	['μ', 'm'],
+	['ν', 'n'],
+	['ξ', 'ks'],
+	['ο', 'o'],
+	['π', 'p'],
+	['ρ', 'r'],
+	['σ', 's'],
+	['τ', 't'],
+	['υ', 'y'],
+	['φ', 'f'],
+	['χ', 'x'],
+	['ψ', 'ps'],
+	['ω', 'o'],
+	['ά', 'a'],
+	['έ', 'e'],
+	['ί', 'i'],
+	['ό', 'o'],
+	['ύ', 'y'],
+	['ή', 'i'],
+	['ώ', 'o'],
+	['ς', 's'],
+	['ϊ', 'i'],
+	['ΰ', 'y'],
+	['ϋ', 'y'],
+	['ΐ', 'i'],
+	['Α', 'A'],
+	['Β', 'B'],
+	['Γ', 'G'],
+	['Δ', 'D'],
+	['Ε', 'E'],
+	['Ζ', 'Z'],
+	['Η', 'I'],
+	['Θ', 'TH'],
+	['Ι', 'I'],
+	['Κ', 'K'],
+	['Λ', 'L'],
+	['Μ', 'M'],
+	['Ν', 'N'],
+	['Ξ', 'KS'],
+	['Ο', 'O'],
+	['Π', 'P'],
+	['Ρ', 'R'],
+	['Σ', 'S'],
+	['Τ', 'T'],
+	['Υ', 'Y'],
+	['Φ', 'F'],
+	['Χ', 'X'],
+	['Ψ', 'PS'],
+	['Ω', 'O'],
+	['Ά', 'A'],
+	['Έ', 'E'],
+	['Ί', 'I'],
+	['Ό', 'O'],
+	['Ύ', 'Y'],
+	['Ή', 'I'],
+	['Ώ', 'O'],
+	['Ϊ', 'I'],
+	['Ϋ', 'Y'],
+
+	// Disabled as it conflicts with German and Latin.
+	// Hungarian
+	// ['ä', 'a'],
+	// ['Ä', 'A'],
+	// ['ö', 'o'],
+	// ['Ö', 'O'],
+	// ['ü', 'u'],
+	// ['Ü', 'U'],
+	// ['ű', 'u'],
+	// ['Ű', 'U'],
+
+	// Latvian
+	['ā', 'a'],
+	['ē', 'e'],
+	['ģ', 'g'],
+	['ī', 'i'],
+	['ķ', 'k'],
+	['ļ', 'l'],
+	['ņ', 'n'],
+	['ū', 'u'],
+	['Ā', 'A'],
+	['Ē', 'E'],
+	['Ģ', 'G'],
+	['Ī', 'I'],
+	['Ķ', 'k'],
+	['Ļ', 'L'],
+	['Ņ', 'N'],
+	['Ū', 'U'],
+	['č', 'c'],
+	['š', 's'],
+	['ž', 'z'],
+	['Č', 'C'],
+	['Š', 'S'],
+	['Ž', 'Z'],
+
+	// Lithuanian
+	['ą', 'a'],
+	['č', 'c'],
+	['ę', 'e'],
+	['ė', 'e'],
+	['į', 'i'],
+	['š', 's'],
+	['ų', 'u'],
+	['ū', 'u'],
+	['ž', 'z'],
+	['Ą', 'A'],
+	['Č', 'C'],
+	['Ę', 'E'],
+	['Ė', 'E'],
+	['Į', 'I'],
+	['Š', 'S'],
+	['Ų', 'U'],
+	['Ū', 'U'],
+
+	// Macedonian
+	['Ќ', 'Kj'],
+	['ќ', 'kj'],
+	['Љ', 'Lj'],
+	['љ', 'lj'],
+	['Њ', 'Nj'],
+	['њ', 'nj'],
+	['Тс', 'Ts'],
+	['тс', 'ts'],
+
+	// Polish
+	['ą', 'a'],
+	['ć', 'c'],
+	['ę', 'e'],
+	['ł', 'l'],
+	['ń', 'n'],
+	['ś', 's'],
+	['ź', 'z'],
+	['ż', 'z'],
+	['Ą', 'A'],
+	['Ć', 'C'],
+	['Ę', 'E'],
+	['Ł', 'L'],
+	['Ń', 'N'],
+	['Ś', 'S'],
+	['Ź', 'Z'],
+	['Ż', 'Z'],
+
+	// Disabled as it conflicts with Vietnamese.
+	// Serbian
+	// ['љ', 'lj'],
+	// ['њ', 'nj'],
+	// ['Љ', 'Lj'],
+	// ['Њ', 'Nj'],
+	// ['đ', 'dj'],
+	// ['Đ', 'Dj'],
+	// ['ђ', 'dj'],
+	// ['ј', 'j'],
+	// ['ћ', 'c'],
+	// ['џ', 'dz'],
+	// ['Ђ', 'Dj'],
+	// ['Ј', 'j'],
+	// ['Ћ', 'C'],
+	// ['Џ', 'Dz'],
+
+	// Disabled as it conflicts with German and Latin.
+	// Slovak
+	// ['ä', 'a'],
+	// ['Ä', 'A'],
+	// ['ľ', 'l'],
+	// ['ĺ', 'l'],
+	// ['ŕ', 'r'],
+	// ['Ľ', 'L'],
+	// ['Ĺ', 'L'],
+	// ['Ŕ', 'R'],
+
+	// Disabled as it conflicts with German and Latin.
+	// Swedish
+	// ['å', 'o'],
+	// ['Å', 'o'],
+	// ['ä', 'a'],
+	// ['Ä', 'A'],
+	// ['ë', 'e'],
+	// ['Ë', 'E'],
+	// ['ö', 'o'],
+	// ['Ö', 'O'],
+
+	// Ukrainian
+	['Є', 'Ye'],
+	['І', 'I'],
+	['Ї', 'Yi'],
+	['Ґ', 'G'],
+	['є', 'ye'],
+	['і', 'i'],
+	['ї', 'yi'],
+	['ґ', 'g']
+];
+
+
+/***/ }),
+
 /***/ 427:
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -8455,6 +9627,25 @@ module.exports = require("path");
 
 /***/ }),
 
+/***/ 623:
+/***/ (function(module) {
+
+"use strict";
+
+
+const matchOperatorsRegex = /[|\\{}()[\]^$+*?.-]/g;
+
+module.exports = string => {
+	if (typeof string !== 'string') {
+		throw new TypeError('Expected a string');
+	}
+
+	return string.replace(matchOperatorsRegex, '\\$&');
+};
+
+
+/***/ }),
+
 /***/ 626:
 /***/ (function(module) {
 
@@ -8515,6 +9706,49 @@ module.exports = isPlainObject;
 /***/ (function(module) {
 
 module.exports = require("net");
+
+/***/ }),
+
+/***/ 648:
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+const deburr = __webpack_require__(257);
+const escapeStringRegexp = __webpack_require__(623);
+const builtinReplacements = __webpack_require__(419);
+
+const doCustomReplacements = (string, replacements) => {
+	for (const [key, value] of replacements) {
+		// TODO: Use `String#replaceAll()` when targeting Node.js 16.
+		string = string.replace(new RegExp(escapeStringRegexp(key), 'g'), value);
+	}
+
+	return string;
+};
+
+module.exports = (string, options) => {
+	if (typeof string !== 'string') {
+		throw new TypeError(`Expected a string, got \`${typeof string}\``);
+	}
+
+	options = {
+		customReplacements: [],
+		...options
+	};
+
+	const customReplacements = new Map([
+		...builtinReplacements,
+		...options.customReplacements
+	]);
+
+	string = string.normalize();
+	string = doCustomReplacements(string, customReplacements);
+	string = deburr(string);
+
+	return string;
+};
+
 
 /***/ }),
 
