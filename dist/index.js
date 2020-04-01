@@ -3634,6 +3634,7 @@ function synchronizeTeamData(client, org, authenticatedUser, teams) {
     return __awaiter(this, void 0, void 0, function* () {
         for (const teamName of Object.keys(teams)) {
             const teamSlug = slugify_1.default(teamName, { decamelize: false });
+            const description = teams[teamName].description;
             const desiredMembers = teams[teamName].members.map((m) => m.github);
             core.debug(`Desired team members for team slug ${teamSlug}:`);
             core.debug(JSON.stringify(desiredMembers));
@@ -3641,12 +3642,12 @@ function synchronizeTeamData(client, org, authenticatedUser, teams) {
             if (existingTeam) {
                 core.debug(`Existing team members for team slug ${teamSlug}:`);
                 core.debug(JSON.stringify(existingMembers));
-                yield client.teams.updateInOrg({ org, team_slug: teamSlug, name: teamName });
+                yield client.teams.updateInOrg({ org, team_slug: teamSlug, name: teamName, description });
                 yield removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
             }
             else {
                 core.debug(`No team was found in ${org} with slug ${teamSlug}. Creating one.`);
-                yield createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser);
+                yield createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser, description);
             }
             yield addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
         }
@@ -3675,9 +3676,9 @@ function addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMember
         }
     });
 }
-function createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser) {
+function createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser, description) {
     return __awaiter(this, void 0, void 0, function* () {
-        yield client.teams.create({ org, name: teamName, privacy: 'closed' });
+        yield client.teams.create({ org, name: teamName, description, privacy: 'closed' });
         core.debug(`Removing creator (${authenticatedUser}) from ${teamSlug}`);
         yield client.teams.removeMembershipInOrg({
             org,
