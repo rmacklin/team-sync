@@ -58,10 +58,21 @@ async function synchronizeTeamData(
       await createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser)
     }
 
-    for (const username of desiredMembers) {
-      if (!existingMembers.includes(username)) {
-        core.debug(`Adding ${username} to ${teamSlug}`)
-      }
+    await addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers)
+  }
+}
+
+async function addNewTeamMembers(
+  client: github.GitHub,
+  org: string,
+  teamSlug: string,
+  existingMembers: string[],
+  desiredMembers: string[]
+): Promise<void> {
+  for (const username of desiredMembers) {
+    if (!existingMembers.includes(username)) {
+      core.debug(`Adding ${username} to ${teamSlug}`)
+      await client.teams.addOrUpdateMembershipInOrg({org, team_slug: teamSlug, username})
     }
   }
 }

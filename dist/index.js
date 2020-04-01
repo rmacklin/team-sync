@@ -3654,10 +3654,16 @@ function synchronizeTeamData(client, org, authenticatedUser, teams) {
                 core.debug(`No team was found in ${org} with slug ${teamSlug}. Creating one.`);
                 yield createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser);
             }
-            for (const username of desiredMembers) {
-                if (!existingMembers.includes(username)) {
-                    core.debug(`Adding ${username} to ${teamSlug}`);
-                }
+            yield addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
+        }
+    });
+}
+function addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers) {
+    return __awaiter(this, void 0, void 0, function* () {
+        for (const username of desiredMembers) {
+            if (!existingMembers.includes(username)) {
+                core.debug(`Adding ${username} to ${teamSlug}`);
+                yield client.teams.addOrUpdateMembershipInOrg({ org, team_slug: teamSlug, username });
             }
         }
     });
