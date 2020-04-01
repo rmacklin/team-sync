@@ -46,6 +46,7 @@ async function synchronizeTeamData(
       core.debug(`Existing team members for team slug ${teamSlug}:`)
       core.debug(JSON.stringify(existingMembers))
 
+      await client.teams.updateInOrg({org, team_slug: teamSlug, name: teamName})
       await removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers)
     } else {
       core.debug(`No team was found in ${org} with slug ${teamSlug}. Creating one.`)

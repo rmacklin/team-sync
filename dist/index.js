@@ -3641,6 +3641,7 @@ function synchronizeTeamData(client, org, authenticatedUser, teams) {
             if (existingTeam) {
                 core.debug(`Existing team members for team slug ${teamSlug}:`);
                 core.debug(JSON.stringify(existingMembers));
+                yield client.teams.updateInOrg({ org, team_slug: teamSlug, name: teamName });
                 yield removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
             }
             else {
