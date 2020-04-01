@@ -1,8 +1,8 @@
 {
-  "name": "typescript-action",
-  "version": "0.0.0",
+  "name": "team-sync",
+  "version": "0.1.0",
   "private": true,
-  "description": "TypeScript template action",
+  "description": "GitHub action to sync ynchronize GitHub Teams with the contents of a teams document",
   "main": "lib/main.js",
   "scripts": {
     "build": "tsc",
@@ -15,14 +15,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/actions/typescript-action.git"
+    "url": "git+https://github.com/rmacklin/team-sync.git"
   },
   "keywords": [
     "actions",
     "node",
     "setup"
   ],
-  "author": "YourNameOrOrganization",
+  "author": "Richard Macklin",
   "license": "MIT",
   "dependencies": {
     "@actions/core": "^1.2.0"

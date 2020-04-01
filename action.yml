@@ -1,10 +1,15 @@
-name: 'Your name here'
-description: 'Provide a description here'
-author: 'Your name or organization here'
+name: 'Team Sync'
+description: 'Synchronize GitHub Teams with the contents of a teams document'
+author: 'rmacklin'
 inputs:
-  myInput:              # change this
-    description: 'input description here'
-    default: 'default value if applicable'
+  repo-token:
+    description: 'A GitHub access token secret - must have the admin:org scope'
+  team-data-path:
+    description: 'The path to the team data document'
+    default: '.github/teams.json'
+  prefix-teams-with:
+    description: 'A prefix to add to the name of each team when creating the associated GitHub Team'
+    default: ''
 runs:
   using: 'node12'
   main: 'dist/index.js'
