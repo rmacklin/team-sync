@@ -3516,6 +3516,10 @@ function run() {
             const token = core.getInput('repo-token', { required: true });
             const teamDataPath = core.getInput('team-data-path');
             const client = new github.GitHub(token);
+            core.debug('Fetching authenticated user');
+            const authenticatedUserResponse = yield client.users.getAuthenticated();
+            const authenticatedUser = authenticatedUserResponse.data.login;
+            core.debug(`GitHub client is authenticated as ${authenticatedUser}`);
             core.debug(`Fetching team data from ${teamDataPath}`);
             const teams = yield getTeamData(client, teamDataPath);
             core.debug(`teams: ${JSON.stringify(teams)}`);
