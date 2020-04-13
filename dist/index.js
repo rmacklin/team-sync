@@ -3637,6 +3637,10 @@ function synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePref
             const teamName = prefixName(unprefixedTeamName, teamNamePrefix);
             const teamSlug = slugify_1.default(teamName, { decamelize: false });
             const teamData = teams[unprefixedTeamName];
+            if (teamData.team_sync_ignored) {
+                core.debug(`Ignoring team ${unprefixedTeamName} due to its team_sync_ignored property`);
+                continue;
+            }
             const description = teamData.description;
             const desiredMembers = teamData.members.map((m) => m.github);
             core.debug(`Desired team members for team slug ${teamSlug}:`);

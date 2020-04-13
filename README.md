@@ -175,6 +175,11 @@ jobs:
         team-data-path: 'teams.json'
 ```
 
+### The `team_sync_ignored` property
+
+You can add `"team_sync_ignored": true` to a team's properties to prevent that
+team from being synchronized with a corresponding GitHub Team.
+
 ## Fine print
 
 Note that if you rename a team (in a way that updates the team's computed slug),

@@ -39,6 +39,12 @@ async function synchronizeTeamData(
     const teamName = prefixName(unprefixedTeamName, teamNamePrefix)
     const teamSlug = slugify(teamName, {decamelize: false})
     const teamData = teams[unprefixedTeamName]
+
+    if (teamData.team_sync_ignored) {
+      core.debug(`Ignoring team ${unprefixedTeamName} due to its team_sync_ignored property`)
+      continue
+    }
+
     const description = teamData.description
     const desiredMembers: string[] = teamData.members.map((m: any) => m.github)
 
