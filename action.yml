@@ -1,6 +1,9 @@
 name: 'Team Sync'
 description: 'Synchronize GitHub Teams with the contents of a teams document'
 author: 'rmacklin'
+branding:
+  icon: 'upload-cloud'
+  color: 'purple'
 inputs:
   repo-token:
     description: 'A GitHub access token secret - must have the admin:org scope'
