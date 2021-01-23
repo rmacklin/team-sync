@@ -1,4 +1,4 @@
-name: 'Team Sync'
+name: 'GitHub Team Sync'
 description: 'Synchronize GitHub Teams with the contents of a teams document'
 author: 'rmacklin'
 branding:
