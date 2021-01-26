@@ -78,7 +78,7 @@ like Issue and PR templates across the organization, that's a good choice.
      synchronize-teams:
        runs-on: ubuntu-latest
        steps:
-       - uses: rmacklin/team-sync@v0.1.0
+       - uses: rmacklin/team-sync@v0
          with:
            repo-token: "${{ secrets.ORG_ADMIN_ACCESS_TOKEN }}"
    ```
@@ -110,7 +110,7 @@ jobs:
   synchronize-teams:
     runs-on: ubuntu-latest
     steps:
-    - uses: rmacklin/team-sync@v0.1.0
+    - uses: rmacklin/team-sync@v0
       with:
         repo-token: "${{ secrets.ORG_ADMIN_ACCESS_TOKEN }}"
         prefix-teams-with: 'foo'
@@ -169,7 +169,7 @@ jobs:
   synchronize-teams:
     runs-on: ubuntu-latest
     steps:
-    - uses: rmacklin/team-sync@v0.1.0
+    - uses: rmacklin/team-sync@v0
       with:
         repo-token: "${{ secrets.ORG_ADMIN_ACCESS_TOKEN }}"
         team-data-path: 'teams.json'

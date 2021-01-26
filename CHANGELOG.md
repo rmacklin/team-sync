@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+Fix version tags in README to clear up documentation on GitHub Marketplace
+
 ## 0.4.0
 
 Support `team_sync_ignored` property to ignore a team during the sync
