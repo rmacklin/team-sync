@@ -17,7 +17,8 @@ async function run(): Promise<void> {
     core.debug(`GitHub client is authenticated as ${authenticatedUser}`)
 
     core.debug(`Fetching team data from ${teamDataPath}`)
-    const teams: any = await getTeamData(client, teamDataPath)
+    const teamDataContent = await fetchContent(client, teamDataPath)
+    const teams = JSON.parse(teamDataContent)
 
     core.debug(`teams: ${JSON.stringify(teams)}`)
 
@@ -146,12 +147,6 @@ async function getExistingTeamAndMembers(
   }
 
   return {existingTeam, existingMembers}
-}
-
-async function getTeamData(client: github.GitHub, teamDataPath: string): Promise<any> {
-  const teamDataContent: string = await fetchContent(client, teamDataPath)
-
-  return JSON.parse(teamDataContent)
 }
 
 async function fetchContent(client: github.GitHub, repoPath: string): Promise<string> {

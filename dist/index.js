@@ -3621,7 +3621,8 @@ function run() {
             const authenticatedUser = authenticatedUserResponse.data.login;
             core.debug(`GitHub client is authenticated as ${authenticatedUser}`);
             core.debug(`Fetching team data from ${teamDataPath}`);
-            const teams = yield getTeamData(client, teamDataPath);
+            const teamDataContent = yield fetchContent(client, teamDataPath);
+            const teams = JSON.parse(teamDataContent);
             core.debug(`teams: ${JSON.stringify(teams)}`);
             yield synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix);
         }
@@ -3712,12 +3713,6 @@ function getExistingTeamAndMembers(client, org, teamSlug) {
             existingTeam = null;
         }
         return { existingTeam, existingMembers };
-    });
-}
-function getTeamData(client, teamDataPath) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const teamDataContent = yield fetchContent(client, teamDataPath);
-        return JSON.parse(teamDataContent);
     });
 }
 function fetchContent(client, repoPath) {
