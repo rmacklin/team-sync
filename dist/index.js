@@ -3612,8 +3612,8 @@ async function run() {
         core.debug(`GitHub client is authenticated as ${authenticatedUser}`);
         core.debug(`Fetching team data from ${teamDataPath}`);
         const teamDataContent = await fetchContent(client, teamDataPath);
-        const teams = JSON.parse(teamDataContent);
-        core.debug(`teams: ${JSON.stringify(teams)}`);
+        const teams = parseTeamData(teamDataContent);
+        core.debug(`Parsed teams configuration into this mapping of team names to team data: ${JSON.stringify(Object.fromEntries(teams))}`);
         await synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix);
     }
     catch (error) {
@@ -3622,16 +3622,14 @@ async function run() {
     }
 }
 async function synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix) {
-    for (const unprefixedTeamName of Object.keys(teams)) {
+    for (const [unprefixedTeamName, teamData] of teams.entries()) {
         const teamName = prefixName(unprefixedTeamName, teamNamePrefix);
         const teamSlug = slugify_1.default(teamName, { decamelize: false });
-        const teamData = teams[unprefixedTeamName];
         if (teamData.team_sync_ignored) {
             core.debug(`Ignoring team ${unprefixedTeamName} due to its team_sync_ignored property`);
             continue;
         }
-        const description = teamData.description;
-        const desiredMembers = teamData.members.map((m) => m.github);
+        const { description, members: desiredMembers } = teamData;
         core.debug(`Desired team members for team slug ${teamSlug}:`);
         core.debug(JSON.stringify(desiredMembers));
         const { existingTeam, existingMembers } = await getExistingTeamAndMembers(client, org, teamSlug);
@@ -3647,6 +3645,54 @@ async function synchronizeTeamData(client, org, authenticatedUser, teams, teamNa
         }
         await addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
     }
+}
+function parseTeamData(rawTeamConfig) {
+    const teamsData = JSON.parse(rawTeamConfig);
+    const unexpectedFormatError = new Error('Unexpected team data format (expected an object mapping team names to team metadata)');
+    if (typeof teamsData !== 'object') {
+        throw unexpectedFormatError;
+    }
+    const teams = new Map();
+    for (const teamName in teamsData) {
+        const teamData = teamsData[teamName];
+        if (teamData.members) {
+            const { members } = teamData;
+            if (Array.isArray(members)) {
+                const teamGitHubUsernames = [];
+                for (const member of members) {
+                    if (typeof member.github === 'string') {
+                        teamGitHubUsernames.push(member.github);
+                    }
+                    else {
+                        throw new Error(`Invalid member data encountered within team ${teamName}`);
+                    }
+                }
+                const parsedTeamData = { members: teamGitHubUsernames };
+                if ('description' in teamData) {
+                    const { description } = teamData;
+                    if (typeof description === 'string') {
+                        parsedTeamData.description = description;
+                    }
+                    else {
+                        throw new Error(`Invalid description property for team ${teamName} (expected a string)`);
+                    }
+                }
+                if ('team_sync_ignored' in teamData) {
+                    const { team_sync_ignored } = teamData;
+                    if (typeof team_sync_ignored === 'boolean') {
+                        parsedTeamData.team_sync_ignored = team_sync_ignored;
+                    }
+                    else {
+                        throw new Error(`Invalid team_sync_ignored property for team ${teamName} (expected a boolean)`);
+                    }
+                }
+                teams.set(teamName, parsedTeamData);
+                continue;
+            }
+        }
+        throw unexpectedFormatError;
+    }
+    return teams;
 }
 function prefixName(unprefixedName, prefix) {
     const trimmedPrefix = prefix.trim();
