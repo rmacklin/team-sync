@@ -9,7 +9,7 @@ inputs:
     description: 'A GitHub access token secret - must have the admin:org scope'
   team-data-path:
     description: 'The path to the team data document'
-    default: '.github/teams.json'
+    default: '.github/teams.yml'
   prefix-teams-with:
     description: 'A prefix to add to the name of each team when creating the associated GitHub Team'
     default: ''
