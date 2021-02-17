@@ -3585,15 +3585,6 @@ function checkMode (stat, options) {
 
 "use strict";
 
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importStar = (this && this.__importStar) || function (mod) {
     if (mod && mod.__esModule) return mod;
     var result = {};
@@ -3608,130 +3599,116 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const core = __importStar(__webpack_require__(470));
 const github = __importStar(__webpack_require__(469));
 const slugify_1 = __importDefault(__webpack_require__(178));
-function run() {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const token = core.getInput('repo-token', { required: true });
-            const teamDataPath = core.getInput('team-data-path');
-            const teamNamePrefix = core.getInput('prefix-teams-with');
-            const client = new github.GitHub(token);
-            const org = github.context.repo.owner;
-            core.debug('Fetching authenticated user');
-            const authenticatedUserResponse = yield client.users.getAuthenticated();
-            const authenticatedUser = authenticatedUserResponse.data.login;
-            core.debug(`GitHub client is authenticated as ${authenticatedUser}`);
-            core.debug(`Fetching team data from ${teamDataPath}`);
-            const teamDataContent = yield fetchContent(client, teamDataPath);
-            const teams = JSON.parse(teamDataContent);
-            core.debug(`teams: ${JSON.stringify(teams)}`);
-            yield synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix);
-        }
-        catch (error) {
-            core.error(error);
-            core.setFailed(error.message);
-        }
-    });
+async function run() {
+    try {
+        const token = core.getInput('repo-token', { required: true });
+        const teamDataPath = core.getInput('team-data-path');
+        const teamNamePrefix = core.getInput('prefix-teams-with');
+        const client = new github.GitHub(token);
+        const org = github.context.repo.owner;
+        core.debug('Fetching authenticated user');
+        const authenticatedUserResponse = await client.users.getAuthenticated();
+        const authenticatedUser = authenticatedUserResponse.data.login;
+        core.debug(`GitHub client is authenticated as ${authenticatedUser}`);
+        core.debug(`Fetching team data from ${teamDataPath}`);
+        const teamDataContent = await fetchContent(client, teamDataPath);
+        const teams = JSON.parse(teamDataContent);
+        core.debug(`teams: ${JSON.stringify(teams)}`);
+        await synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix);
+    }
+    catch (error) {
+        core.error(error);
+        core.setFailed(error.message);
+    }
 }
-function synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix) {
-    return __awaiter(this, void 0, void 0, function* () {
-        for (const unprefixedTeamName of Object.keys(teams)) {
-            const teamName = prefixName(unprefixedTeamName, teamNamePrefix);
-            const teamSlug = slugify_1.default(teamName, { decamelize: false });
-            const teamData = teams[unprefixedTeamName];
-            if (teamData.team_sync_ignored) {
-                core.debug(`Ignoring team ${unprefixedTeamName} due to its team_sync_ignored property`);
-                continue;
-            }
-            const description = teamData.description;
-            const desiredMembers = teamData.members.map((m) => m.github);
-            core.debug(`Desired team members for team slug ${teamSlug}:`);
-            core.debug(JSON.stringify(desiredMembers));
-            const { existingTeam, existingMembers } = yield getExistingTeamAndMembers(client, org, teamSlug);
-            if (existingTeam) {
-                core.debug(`Existing team members for team slug ${teamSlug}:`);
-                core.debug(JSON.stringify(existingMembers));
-                yield client.teams.updateInOrg({ org, team_slug: teamSlug, name: teamName, description });
-                yield removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
-            }
-            else {
-                core.debug(`No team was found in ${org} with slug ${teamSlug}. Creating one.`);
-                yield createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser, description);
-            }
-            yield addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
+async function synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix) {
+    for (const unprefixedTeamName of Object.keys(teams)) {
+        const teamName = prefixName(unprefixedTeamName, teamNamePrefix);
+        const teamSlug = slugify_1.default(teamName, { decamelize: false });
+        const teamData = teams[unprefixedTeamName];
+        if (teamData.team_sync_ignored) {
+            core.debug(`Ignoring team ${unprefixedTeamName} due to its team_sync_ignored property`);
+            continue;
         }
-    });
+        const description = teamData.description;
+        const desiredMembers = teamData.members.map((m) => m.github);
+        core.debug(`Desired team members for team slug ${teamSlug}:`);
+        core.debug(JSON.stringify(desiredMembers));
+        const { existingTeam, existingMembers } = await getExistingTeamAndMembers(client, org, teamSlug);
+        if (existingTeam) {
+            core.debug(`Existing team members for team slug ${teamSlug}:`);
+            core.debug(JSON.stringify(existingMembers));
+            await client.teams.updateInOrg({ org, team_slug: teamSlug, name: teamName, description });
+            await removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
+        }
+        else {
+            core.debug(`No team was found in ${org} with slug ${teamSlug}. Creating one.`);
+            await createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser, description);
+        }
+        await addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
+    }
 }
 function prefixName(unprefixedName, prefix) {
     const trimmedPrefix = prefix.trim();
     return trimmedPrefix === '' ? unprefixedName : `${trimmedPrefix} ${unprefixedName}`;
 }
-function removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers) {
-    return __awaiter(this, void 0, void 0, function* () {
-        for (const username of existingMembers) {
-            if (!desiredMembers.includes(username)) {
-                core.debug(`Removing ${username} from ${teamSlug}`);
-                yield client.teams.removeMembershipInOrg({ org, team_slug: teamSlug, username });
-            }
-            else {
-                core.debug(`Keeping ${username} in ${teamSlug}`);
-            }
+async function removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers) {
+    for (const username of existingMembers) {
+        if (!desiredMembers.includes(username)) {
+            core.debug(`Removing ${username} from ${teamSlug}`);
+            await client.teams.removeMembershipInOrg({ org, team_slug: teamSlug, username });
         }
+        else {
+            core.debug(`Keeping ${username} in ${teamSlug}`);
+        }
+    }
+}
+async function addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers) {
+    for (const username of desiredMembers) {
+        if (!existingMembers.includes(username)) {
+            core.debug(`Adding ${username} to ${teamSlug}`);
+            await client.teams.addOrUpdateMembershipInOrg({ org, team_slug: teamSlug, username });
+        }
+    }
+}
+async function createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser, description) {
+    await client.teams.create({ org, name: teamName, description, privacy: 'closed' });
+    core.debug(`Removing creator (${authenticatedUser}) from ${teamSlug}`);
+    await client.teams.removeMembershipInOrg({
+        org,
+        team_slug: teamSlug,
+        username: authenticatedUser
     });
 }
-function addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers) {
-    return __awaiter(this, void 0, void 0, function* () {
-        for (const username of desiredMembers) {
-            if (!existingMembers.includes(username)) {
-                core.debug(`Adding ${username} to ${teamSlug}`);
-                yield client.teams.addOrUpdateMembershipInOrg({ org, team_slug: teamSlug, username });
-            }
-        }
-    });
+async function getExistingTeamAndMembers(client, org, teamSlug) {
+    let existingTeam;
+    let existingMembers = [];
+    try {
+        const teamResponse = await client.teams.getByName({ org, team_slug: teamSlug });
+        existingTeam = teamResponse.data;
+        const membersResponse = await client.teams.listMembersInOrg({ org, team_slug: teamSlug });
+        existingMembers = membersResponse.data.map(m => m.login);
+    }
+    catch (error) {
+        existingTeam = null;
+    }
+    return { existingTeam, existingMembers };
 }
-function createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser, description) {
-    return __awaiter(this, void 0, void 0, function* () {
-        yield client.teams.create({ org, name: teamName, description, privacy: 'closed' });
-        core.debug(`Removing creator (${authenticatedUser}) from ${teamSlug}`);
-        yield client.teams.removeMembershipInOrg({
-            org,
-            team_slug: teamSlug,
-            username: authenticatedUser
-        });
+async function fetchContent(client, repoPath) {
+    const response = await client.repos.getContents({
+        owner: github.context.repo.owner,
+        repo: github.context.repo.repo,
+        path: repoPath,
+        ref: github.context.sha
     });
-}
-function getExistingTeamAndMembers(client, org, teamSlug) {
-    return __awaiter(this, void 0, void 0, function* () {
-        let existingTeam;
-        let existingMembers = [];
-        try {
-            const teamResponse = yield client.teams.getByName({ org, team_slug: teamSlug });
-            existingTeam = teamResponse.data;
-            const membersResponse = yield client.teams.listMembersInOrg({ org, team_slug: teamSlug });
-            existingMembers = membersResponse.data.map(m => m.login);
-        }
-        catch (error) {
-            existingTeam = null;
-        }
-        return { existingTeam, existingMembers };
-    });
-}
-function fetchContent(client, repoPath) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const response = yield client.repos.getContents({
-            owner: github.context.repo.owner,
-            repo: github.context.repo.repo,
-            path: repoPath,
-            ref: github.context.sha
-        });
-        if (Array.isArray(response.data)) {
-            throw new Error('path must point to a single file, not a directory');
-        }
-        const { content, encoding } = response.data;
-        if (typeof content !== 'string' || encoding !== 'base64') {
-            throw new Error('Octokit.repos.getContents returned an unexpected response');
-        }
-        return Buffer.from(content, encoding).toString();
-    });
+    if (Array.isArray(response.data)) {
+        throw new Error('path must point to a single file, not a directory');
+    }
+    const { content, encoding } = response.data;
+    if (typeof content !== 'string' || encoding !== 'base64') {
+        throw new Error('Octokit.repos.getContents returned an unexpected response');
+    }
+    return Buffer.from(content, encoding).toString();
 }
 run();
 
