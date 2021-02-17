@@ -3728,7 +3728,14 @@ function fetchContent(client, repoPath) {
             path: repoPath,
             ref: github.context.sha
         });
-        return Buffer.from(response.data.content, response.data.encoding).toString();
+        if (Array.isArray(response.data)) {
+            throw new Error('path must point to a single file, not a directory');
+        }
+        const { content, encoding } = response.data;
+        if (typeof content !== 'string' || encoding !== 'base64') {
+            throw new Error('Octokit.repos.getContents returned an unexpected response');
+        }
+        return Buffer.from(content, encoding).toString();
     });
 }
 run();
