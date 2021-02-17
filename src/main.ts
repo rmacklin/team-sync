@@ -1,5 +1,6 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
+import {Octokit} from '@octokit/rest'
 import slugify from '@sindresorhus/slugify'
 
 interface TeamData {
@@ -201,7 +202,10 @@ async function getExistingTeamAndMembers(
   client: github.GitHub,
   org: string,
   teamSlug: string
-): Promise<any> {
+): Promise<{
+  existingTeam: Octokit.TeamsGetByNameResponse | null
+  existingMembers: string[]
+}> {
   let existingTeam
   let existingMembers: string[] = []
 
