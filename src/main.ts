@@ -13,7 +13,7 @@ async function run(): Promise<void> {
 
     core.debug('Fetching authenticated user')
     const authenticatedUserResponse = await client.users.getAuthenticated()
-    const authenticatedUser: string = authenticatedUserResponse.data.login
+    const authenticatedUser = authenticatedUserResponse.data.login
     core.debug(`GitHub client is authenticated as ${authenticatedUser}`)
 
     core.debug(`Fetching team data from ${teamDataPath}`)
