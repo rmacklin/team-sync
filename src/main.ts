@@ -2,6 +2,7 @@ import * as core from '@actions/core'
 import * as github from '@actions/github'
 import {Octokit} from '@octokit/rest'
 import slugify from '@sindresorhus/slugify'
+import * as yaml from 'js-yaml'
 
 interface TeamData {
   members: string[]
@@ -25,6 +26,9 @@ async function run(): Promise<void> {
 
     core.debug(`Fetching team data from ${teamDataPath}`)
     const teamDataContent = await fetchContent(client, teamDataPath)
+
+    core.debug(`raw teams config:\n${teamDataContent}`)
+
     const teams = parseTeamData(teamDataContent)
 
     core.debug(
@@ -79,7 +83,7 @@ async function synchronizeTeamData(
 }
 
 function parseTeamData(rawTeamConfig: string): Map<string, TeamData> {
-  const teamsData = JSON.parse(rawTeamConfig)
+  const teamsData = JSON.parse(JSON.stringify(yaml.safeLoad(rawTeamConfig)))
   const unexpectedFormatError = new Error(
     'Unexpected team data format (expected an object mapping team names to team metadata)'
   )

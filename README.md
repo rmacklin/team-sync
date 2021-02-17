@@ -11,35 +11,21 @@ like Issue and PR templates across the organization, that's a good choice.
 
 2. Create a `.github/teams.yml` file in that repository with the following
    format:
-   ```json
-   {
-     "designers": {
-       "description": "The amazing design team",
-       "slack": "#design-team",
-       "members": [
-         {
-           "name": "Alice Smith",
-           "github": "alicesmith"
-         },
-         {
-           "name": "Bob Jones",
-           "github": "bjonesdev"
-         }
-       ]
-     },
-     "fighters": {
-       "members": [
-         {
-           "name": "Dave Grohl",
-           "github": "dgrohl"
-         },
-         {
-           "name": "Taylor Hawkins",
-           "github": "taylorhawk1"
-         }
-       ]
-     }
-   }
+   ```yml
+   designers:
+     description: The amazing design team
+     slack: "#design-team"
+     members:
+     - name: Alice Smith
+       github: alicesmith
+     - name: Bob Jones
+       github: bjonesdev
+   fighters:
+     members:
+     - name: Dave Grohl
+       github: dgrohl
+     - name: Taylor Hawkins
+       github: taylorhawk1
    ```
    For the team sync, what's important is that the outer object maps each team
    name to an object with a `members` array of objects containing a `github`
@@ -117,34 +103,20 @@ jobs:
 ```
 
 `.github/teams.yml`:
-```json
-{
-  "designers": {
-    "description": "The amazing design team",
-    "members": [
-      {
-        "name": "Alice Smith",
-        "github": "alicesmith"
-      },
-      {
-        "name": "Bob Jones",
-        "github": "bjonesdev"
-      }
-    ]
-  },
-  "fighters": {
-    "members": [
-      {
-        "name": "Dave Grohl",
-        "github": "dgrohl"
-      },
-      {
-        "name": "Taylor Hawkins",
-        "github": "taylorhawk1"
-      }
-    ]
-  }
-}
+```yml
+designers:
+  description: The amazing design team
+  members:
+  - name: Alice Smith
+    github: alicesmith
+  - name: Bob Jones
+    github: bjonesdev
+fighters:
+  members:
+  - name: Dave Grohl
+    github: dgrohl
+  - name: Taylor Hawkins
+    github: taylorhawk1
 ```
 This configuration would create the teams `foo designers` and `foo fighters`
 (rather than `designers` and `fighters`).
