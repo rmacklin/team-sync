@@ -1,12 +1,13 @@
 import {RestEndpointMethods} from '@octokit/plugin-rest-endpoint-methods/dist-types/generated/method-types'
 import slugify from '@sindresorhus/slugify'
 import * as core from '@actions/core'
+import {TeamData} from "./team-data";
 
 export async function synchronizeTeamData(
   client: RestEndpointMethods,
   org: string,
   authenticatedUser: string,
-  teams: any,
+  teams: TeamData,
   teamNamePrefix: string
 ): Promise<void> {
   for (const unprefixedTeamName of Object.keys(teams)) {
