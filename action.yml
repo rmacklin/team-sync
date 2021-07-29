@@ -5,14 +5,17 @@ branding:
   icon: 'upload-cloud'
   color: 'purple'
 inputs:
-  repo-token:
+  token:
     description: 'A GitHub access token secret - must have the admin:org scope'
+    required: true
   team-data-path:
     description: 'The path to the team data document'
-    default: '.github/teams.json'
+    default: '.github/teams.yml'
+    required: false
   prefix-teams-with:
     description: 'A prefix to add to the name of each team when creating the associated GitHub Team'
     default: ''
+    required: false
 runs:
   using: 'node12'
   main: 'dist/index.js'

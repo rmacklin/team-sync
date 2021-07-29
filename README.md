@@ -41,7 +41,7 @@ like Issue and PR templates across the organization, that's a good choice.
      }
    }
    ```
-   For the team sync, what's important is that the JSON object maps each team
+   For the team sync, what's important is that the JSON/Yaml object maps each team
    name to an object with a `members` array of objects containing a `github`
    key. Any other fields can be included in the `members` objects (e.g. `name`,
    `email`, etc.) but `github` is the required one that declares which GitHub
@@ -61,7 +61,7 @@ like Issue and PR templates across the organization, that's a good choice.
 
 4. In the repository settings, create a new Secret called
    `ORG_ADMIN_ACCESS_TOKEN` to store the token. (The name of the secret is not
-   important, as long you use that name to configure the `repo-token` secret
+   important, as long you use that name to configure the `token` secret
    below.)
 
 5. Create a `.github/workflows/team_sync.yml` file like this:
@@ -80,7 +80,7 @@ like Issue and PR templates across the organization, that's a good choice.
        steps:
        - uses: rmacklin/team-sync@v0
          with:
-           repo-token: "${{ secrets.ORG_ADMIN_ACCESS_TOKEN }}"
+           token: "${{ secrets.ORG_ADMIN_ACCESS_TOKEN }}"
    ```
 
 Now your team can create pull requests that update the `teams.json` file
@@ -112,7 +112,7 @@ jobs:
     steps:
     - uses: rmacklin/team-sync@v0
       with:
-        repo-token: "${{ secrets.ORG_ADMIN_ACCESS_TOKEN }}"
+        token: "${{ secrets.ORG_ADMIN_ACCESS_TOKEN }}"
         prefix-teams-with: 'foo'
 ```
 
@@ -151,7 +151,7 @@ This configuration would create the teams `foo designers` and `foo fighters`
 
 ### `team-data-path`
 
-By default, the action looks for the team data in the `.github/teams.json` file
+By default, the action looks for the team data in the `.github/teams.yml` file
 in your repository. You can specify the `team-data-path` option to change this.
 (Note that you'll also want to change the `paths` configuration specified in the
 workflow definition.) For example, if you want to keep `teams.json` in the root
@@ -171,7 +171,7 @@ jobs:
     steps:
     - uses: rmacklin/team-sync@v0
       with:
-        repo-token: "${{ secrets.ORG_ADMIN_ACCESS_TOKEN }}"
+        token: "${{ secrets.ORG_ADMIN_ACCESS_TOKEN }}"
         team-data-path: 'teams.json'
 ```
 
