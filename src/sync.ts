@@ -20,8 +20,8 @@ export async function synchronizeTeamData(
       continue
     }
 
-    const description = teamData.description
-    const desiredMembers: string[] = teamData.members.map((m: any) => m.github)
+    const description = teamData.description || ''
+    const desiredMembers: string[] = (teamData.members || []).map((m: any) => m.github)
 
     core.debug(`Desired team members for team slug ${teamSlug}:`)
     core.debug(JSON.stringify(desiredMembers))

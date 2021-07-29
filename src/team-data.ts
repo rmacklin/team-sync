@@ -7,7 +7,7 @@ export interface TeamData {
   [key: string]: {
     team_sync_ignored?: boolean;
     description?: string
-    slack: string
-    members: TeamMember[]
+    slack?: string
+    members?: TeamMember[]
   }
 }
