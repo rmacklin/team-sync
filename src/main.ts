@@ -18,7 +18,7 @@ async function run(): Promise<void> {
     core.debug(`GitHub client is authenticated as ${authenticatedUser}`)
 
     core.debug(`Fetching team data from ${teamDataPath}`)
-    const teams: any = await getTeamData(client, teamDataPath)
+    const teams = await getTeamData(client, teamDataPath)
 
     core.debug(`teams: ${JSON.stringify(teams)}`)
 

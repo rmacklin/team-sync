@@ -1,7 +1,7 @@
-import {RestEndpointMethods} from '@octokit/plugin-rest-endpoint-methods/dist-types/generated/method-types'
 import slugify from '@sindresorhus/slugify'
 import * as core from '@actions/core'
-import {TeamData} from "./team-data";
+import {TeamData} from './team-data'
+import {RestEndpointMethods} from '@octokit/plugin-rest-endpoint-methods/dist-types/generated/method-types'
 
 export async function synchronizeTeamData(
   client: RestEndpointMethods,
@@ -104,7 +104,10 @@ async function getExistingTeamAndMembers(
   client: RestEndpointMethods,
   org: string,
   teamSlug: string
-): Promise<any> {
+): Promise<{
+  existingTeam: any | null
+  existingMembers: string[]
+}> {
   let existingTeam
   let existingMembers: string[] = []
 
@@ -117,7 +120,7 @@ async function getExistingTeamAndMembers(
 
     existingMembers = membersResponse.data
       .map(m => m?.login)
-      .filter(x => x != undefined) as string[]
+      .filter(x => x !== undefined) as string[]
   } catch (error) {
     existingTeam = null
   }

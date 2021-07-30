@@ -42,7 +42,14 @@ function fetchContent(client, repoPath) {
             path: repoPath,
             ref: github_1.default.context.sha
         });
-        return Buffer.from(response.data.content, response.data.encoding).toString();
+        if (Array.isArray(response.data)) {
+            throw new Error('path must point to a single file, not a directory');
+        }
+        const { content, encoding } = response.data;
+        if (typeof content !== 'string' || !Buffer.isEncoding(encoding)) {
+            throw new Error('Octokit.repos.getContents returned an unexpected response');
+        }
+        return Buffer.from(content, encoding).toString();
     });
 }
 
@@ -168,8 +175,8 @@ function synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePref
                 core.debug(`Ignoring team ${unprefixedTeamName} due to its team_sync_ignored property`);
                 continue;
             }
-            const description = teamData.description;
-            const desiredMembers = teamData.members.map((m) => m.github);
+            const description = teamData.description || '';
+            const desiredMembers = (teamData.members || []).map((m) => m.github);
             core.debug(`Desired team members for team slug ${teamSlug}:`);
             core.debug(JSON.stringify(desiredMembers));
             const { existingTeam, existingMembers } = yield getExistingTeamAndMembers(client, org, teamSlug);
@@ -236,7 +243,7 @@ function getExistingTeamAndMembers(client, org, teamSlug) {
             const membersResponse = yield client.teams.listMembersInOrg({ org, team_slug: teamSlug });
             existingMembers = membersResponse.data
                 .map(m => m === null || m === void 0 ? void 0 : m.login)
-                .filter(x => x != undefined);
+                .filter(x => x !== undefined);
         }
         catch (error) {
             existingTeam = null;

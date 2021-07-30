@@ -17,12 +17,22 @@ export async function getTeamData(
 }
 
 async function fetchContent(client: RestEndpointMethods, repoPath: string): Promise<string> {
-  const response: any = await client.repos.getContent({
+  const response = await client.repos.getContent({
     owner: github.context.repo.owner,
     repo: github.context.repo.repo,
     path: repoPath,
     ref: github.context.sha
   })
 
-  return Buffer.from(response.data.content, response.data.encoding).toString()
+  if (Array.isArray(response.data)) {
+    throw new Error('path must point to a single file, not a directory')
+  }
+
+  const {content, encoding} = response.data as any
+
+  if (typeof content !== 'string' || !Buffer.isEncoding(encoding)) {
+    throw new Error('Octokit.repos.getContents returned an unexpected response')
+  }
+
+  return Buffer.from(content, encoding).toString()
 }
