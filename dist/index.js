@@ -6,15 +6,6 @@ require('./sourcemap-register.js');/******/ (() => { // webpackBootstrap
 
 "use strict";
 
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -22,35 +13,31 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getTeamData = void 0;
 const github_1 = __importDefault(__nccwpck_require__(5438));
 const js_yaml_1 = __importDefault(__nccwpck_require__(1917));
-function getTeamData(client, teamDataPath) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const teamDataContent = yield fetchContent(client, teamDataPath);
-        if (teamDataPath.toLowerCase().endsWith('.json')) {
-            return JSON.parse(teamDataContent);
-        }
-        else {
-            return (js_yaml_1.default.load(teamDataContent) || {});
-        }
-    });
+async function getTeamData(client, teamDataPath) {
+    const teamDataContent = await fetchContent(client, teamDataPath);
+    if (teamDataPath.toLowerCase().endsWith('.json')) {
+        return JSON.parse(teamDataContent);
+    }
+    else {
+        return (js_yaml_1.default.load(teamDataContent) || {});
+    }
 }
 exports.getTeamData = getTeamData;
-function fetchContent(client, repoPath) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const response = yield client.repos.getContent({
-            owner: github_1.default.context.repo.owner,
-            repo: github_1.default.context.repo.repo,
-            path: repoPath,
-            ref: github_1.default.context.sha
-        });
-        if (Array.isArray(response.data)) {
-            throw new Error('path must point to a single file, not a directory');
-        }
-        const { content, encoding } = response.data;
-        if (typeof content !== 'string' || !Buffer.isEncoding(encoding)) {
-            throw new Error('Octokit.repos.getContents returned an unexpected response');
-        }
-        return Buffer.from(content, encoding).toString();
+async function fetchContent(client, repoPath) {
+    const response = await client.repos.getContent({
+        owner: github_1.default.context.repo.owner,
+        repo: github_1.default.context.repo.repo,
+        path: repoPath,
+        ref: github_1.default.context.sha
     });
+    if (Array.isArray(response.data)) {
+        throw new Error('path must point to a single file, not a directory');
+    }
+    const { content, encoding } = response.data;
+    if (typeof content !== 'string' || !Buffer.isEncoding(encoding)) {
+        throw new Error('Octokit.repos.getContents returned an unexpected response');
+    }
+    return Buffer.from(content, encoding).toString();
 }
 
 
@@ -80,15 +67,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -97,28 +75,26 @@ const core = __importStar(__nccwpck_require__(2186));
 const github_1 = __importDefault(__nccwpck_require__(5438));
 const get_team_data_1 = __nccwpck_require__(882);
 const sync_1 = __nccwpck_require__(5056);
-function run() {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const token = core.getInput('token');
-            const teamDataPath = core.getInput('team-data-path');
-            const teamNamePrefix = core.getInput('prefix-teams-with');
-            const client = github_1.default.getOctokit(token).rest;
-            const org = github_1.default.context.repo.owner;
-            core.debug('Fetching authenticated user');
-            const authenticatedUserResponse = yield client.users.getAuthenticated();
-            const authenticatedUser = authenticatedUserResponse.data.login;
-            core.debug(`GitHub client is authenticated as ${authenticatedUser}`);
-            core.debug(`Fetching team data from ${teamDataPath}`);
-            const teams = yield get_team_data_1.getTeamData(client, teamDataPath);
-            core.debug(`teams: ${JSON.stringify(teams)}`);
-            yield sync_1.synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix);
-        }
-        catch (error) {
-            core.error(error);
-            core.setFailed(error.message);
-        }
-    });
+async function run() {
+    try {
+        const token = core.getInput('token');
+        const teamDataPath = core.getInput('team-data-path');
+        const teamNamePrefix = core.getInput('prefix-teams-with');
+        const client = github_1.default.getOctokit(token).rest;
+        const org = github_1.default.context.repo.owner;
+        core.debug('Fetching authenticated user');
+        const authenticatedUserResponse = await client.users.getAuthenticated();
+        const authenticatedUser = authenticatedUserResponse.data.login;
+        core.debug(`GitHub client is authenticated as ${authenticatedUser}`);
+        core.debug(`Fetching team data from ${teamDataPath}`);
+        const teams = await get_team_data_1.getTeamData(client, teamDataPath);
+        core.debug(`teams: ${JSON.stringify(teams)}`);
+        await sync_1.synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix);
+    }
+    catch (error) {
+        core.error(error);
+        core.setFailed(error.message);
+    }
 }
 run();
 
@@ -149,15 +125,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -165,91 +132,81 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.synchronizeTeamData = void 0;
 const slugify_1 = __importDefault(__nccwpck_require__(5268));
 const core = __importStar(__nccwpck_require__(2186));
-function synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix) {
-    return __awaiter(this, void 0, void 0, function* () {
-        for (const unprefixedTeamName of Object.keys(teams)) {
-            const teamName = prefixName(unprefixedTeamName, teamNamePrefix);
-            const teamSlug = slugify_1.default(teamName, { decamelize: false });
-            const teamData = teams[unprefixedTeamName];
-            if (teamData.team_sync_ignored) {
-                core.debug(`Ignoring team ${unprefixedTeamName} due to its team_sync_ignored property`);
-                continue;
-            }
-            const description = teamData.description || '';
-            const desiredMembers = (teamData.members || []).map((m) => m.github);
-            core.debug(`Desired team members for team slug ${teamSlug}:`);
-            core.debug(JSON.stringify(desiredMembers));
-            const { existingTeam, existingMembers } = yield getExistingTeamAndMembers(client, org, teamSlug);
-            if (existingTeam) {
-                core.debug(`Existing team members for team slug ${teamSlug}:`);
-                core.debug(JSON.stringify(existingMembers));
-                yield client.teams.updateInOrg({ org, team_slug: teamSlug, name: teamName, description });
-                yield removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
-            }
-            else {
-                core.debug(`No team was found in ${org} with slug ${teamSlug}. Creating one.`);
-                yield createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser, description);
-            }
-            yield addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
+async function synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix) {
+    for (const unprefixedTeamName of Object.keys(teams)) {
+        const teamName = prefixName(unprefixedTeamName, teamNamePrefix);
+        const teamSlug = slugify_1.default(teamName, { decamelize: false });
+        const teamData = teams[unprefixedTeamName];
+        if (teamData.team_sync_ignored) {
+            core.debug(`Ignoring team ${unprefixedTeamName} due to its team_sync_ignored property`);
+            continue;
         }
-    });
+        const description = teamData.description || '';
+        const desiredMembers = (teamData.members || []).map((m) => m.github);
+        core.debug(`Desired team members for team slug ${teamSlug}:`);
+        core.debug(JSON.stringify(desiredMembers));
+        const { existingTeam, existingMembers } = await getExistingTeamAndMembers(client, org, teamSlug);
+        if (existingTeam) {
+            core.debug(`Existing team members for team slug ${teamSlug}:`);
+            core.debug(JSON.stringify(existingMembers));
+            await client.teams.updateInOrg({ org, team_slug: teamSlug, name: teamName, description });
+            await removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
+        }
+        else {
+            core.debug(`No team was found in ${org} with slug ${teamSlug}. Creating one.`);
+            await createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser, description);
+        }
+        await addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers);
+    }
 }
 exports.synchronizeTeamData = synchronizeTeamData;
 function prefixName(unprefixedName, prefix) {
     const trimmedPrefix = prefix.trim();
     return trimmedPrefix === '' ? unprefixedName : `${trimmedPrefix} ${unprefixedName}`;
 }
-function removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers) {
-    return __awaiter(this, void 0, void 0, function* () {
-        for (const username of existingMembers) {
-            if (!desiredMembers.includes(username)) {
-                core.debug(`Removing ${username} from ${teamSlug}`);
-                yield client.teams.removeMembershipForUserInOrg({ org, team_slug: teamSlug, username });
-            }
-            else {
-                core.debug(`Keeping ${username} in ${teamSlug}`);
-            }
+async function removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers) {
+    for (const username of existingMembers) {
+        if (!desiredMembers.includes(username)) {
+            core.debug(`Removing ${username} from ${teamSlug}`);
+            await client.teams.removeMembershipForUserInOrg({ org, team_slug: teamSlug, username });
         }
+        else {
+            core.debug(`Keeping ${username} in ${teamSlug}`);
+        }
+    }
+}
+async function addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers) {
+    for (const username of desiredMembers) {
+        if (!existingMembers.includes(username)) {
+            core.debug(`Adding ${username} to ${teamSlug}`);
+            await client.teams.addOrUpdateMembershipForUserInOrg({ org, team_slug: teamSlug, username });
+        }
+    }
+}
+async function createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser, description) {
+    await client.teams.create({ org, name: teamName, description, privacy: 'closed' });
+    core.debug(`Removing creator (${authenticatedUser}) from ${teamSlug}`);
+    await client.teams.removeMembershipForUserInOrg({
+        org,
+        team_slug: teamSlug,
+        username: authenticatedUser
     });
 }
-function addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers) {
-    return __awaiter(this, void 0, void 0, function* () {
-        for (const username of desiredMembers) {
-            if (!existingMembers.includes(username)) {
-                core.debug(`Adding ${username} to ${teamSlug}`);
-                yield client.teams.addOrUpdateMembershipForUserInOrg({ org, team_slug: teamSlug, username });
-            }
-        }
-    });
-}
-function createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser, description) {
-    return __awaiter(this, void 0, void 0, function* () {
-        yield client.teams.create({ org, name: teamName, description, privacy: 'closed' });
-        core.debug(`Removing creator (${authenticatedUser}) from ${teamSlug}`);
-        yield client.teams.removeMembershipForUserInOrg({
-            org,
-            team_slug: teamSlug,
-            username: authenticatedUser
-        });
-    });
-}
-function getExistingTeamAndMembers(client, org, teamSlug) {
-    return __awaiter(this, void 0, void 0, function* () {
-        let existingTeam;
-        let existingMembers = [];
-        try {
-            const teamResponse = yield client.teams.getByName({ org, team_slug: teamSlug });
-            existingTeam = teamResponse.data;
-            const membersResponse = yield client.teams.listMembersInOrg({ org, team_slug: teamSlug });
-            existingMembers = membersResponse.data
-                .map(m => m === null || m === void 0 ? void 0 : m.login)
-                .filter(x => x !== undefined);
-        }
-        catch (error) {
-            existingTeam = null;
-        }
-        return { existingTeam, existingMembers };
-    });
+async function getExistingTeamAndMembers(client, org, teamSlug) {
+    let existingTeam;
+    let existingMembers = [];
+    try {
+        const teamResponse = await client.teams.getByName({ org, team_slug: teamSlug });
+        existingTeam = teamResponse.data;
+        const membersResponse = await client.teams.listMembersInOrg({ org, team_slug: teamSlug });
+        existingMembers = membersResponse.data
+            .map(m => m === null || m === void 0 ? void 0 : m.login)
+            .filter(x => x !== undefined);
+    }
+    catch (error) {
+        existingTeam = null;
+    }
+    return { existingTeam, existingMembers };
 }
 
 

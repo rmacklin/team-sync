@@ -2,6 +2,7 @@ import * as core from '@actions/core'
 import github from '@actions/github'
 import {getTeamData} from './get-team-data'
 import {synchronizeTeamData} from './sync'
+import {TeamData} from './team-data'
 
 async function run(): Promise<void> {
   try {
@@ -18,15 +19,9 @@ async function run(): Promise<void> {
     core.debug(`GitHub client is authenticated as ${authenticatedUser}`)
 
     core.debug(`Fetching team data from ${teamDataPath}`)
-    const teams = await getTeamData(client, teamDataPath)
+    const teams: TeamData = await getTeamData(client, teamDataPath)
 
-    const teams = parseTeamData(teamDataContent)
-
-    core.debug(
-      `Parsed teams configuration into this mapping of team names to team data: ${JSON.stringify(
-        Object.fromEntries(teams)
-      )}`
-    )
+    core.debug(`teams: ${JSON.stringify(teams)}`)
 
     await synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix)
   } catch (error) {
