@@ -14,13 +14,19 @@ async function run(): Promise<void> {
 
     core.debug('Fetching authenticated user')
     const authenticatedUserResponse = await client.users.getAuthenticated()
-    const authenticatedUser: string = authenticatedUserResponse.data.login
+    const authenticatedUser = authenticatedUserResponse.data.login
     core.debug(`GitHub client is authenticated as ${authenticatedUser}`)
 
     core.debug(`Fetching team data from ${teamDataPath}`)
     const teams = await getTeamData(client, teamDataPath)
 
-    core.debug(`teams: ${JSON.stringify(teams)}`)
+    const teams = parseTeamData(teamDataContent)
+
+    core.debug(
+      `Parsed teams configuration into this mapping of team names to team data: ${JSON.stringify(
+        Object.fromEntries(teams)
+      )}`
+    )
 
     await synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix)
   } catch (error) {

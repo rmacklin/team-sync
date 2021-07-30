@@ -17,7 +17,7 @@
     "@typescript-eslint/array-type": "error",
     "@typescript-eslint/await-thenable": "error",
     "camelcase": "off",
-    "@typescript-eslint/ban-ts-comment": "error",
+    "@typescript-eslint/camelcase": ["error", {"allow": ["team_slug", "team_sync_ignored"]}],
     "@typescript-eslint/explicit-function-return-type": ["error", {"allowExpressions": true}],
     "@typescript-eslint/func-call-spacing": ["error", "never"],
     "@typescript-eslint/no-array-constructor": "error",

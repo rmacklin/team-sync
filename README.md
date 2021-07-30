@@ -9,37 +9,23 @@ document in an organization repository.
 organization is already using a `.github` repository to manage GitHub files
 like Issue and PR templates across the organization, that's a good choice.
 
-2. Create a `.github/teams.json` file in that repository with the following
+2. Create a `.github/teams.yml` file in that repository with the following
    format:
-   ```json
-   {
-     "designers": {
-       "description": "The amazing design team",
-       "slack": "#design-team",
-       "members": [
-         {
-           "name": "Alice Smith",
-           "github": "alicesmith"
-         },
-         {
-           "name": "Bob Jones",
-           "github": "bjonesdev"
-         }
-       ]
-     },
-     "fighters": {
-       "members": [
-         {
-           "name": "Dave Grohl",
-           "github": "dgrohl"
-         },
-         {
-           "name": "Taylor Hawkins",
-           "github": "taylorhawk1"
-         }
-       ]
-     }
-   }
+   ```yml
+   designers:
+     description: The amazing design team
+     slack: "#design-team"
+     members:
+     - name: Alice Smith
+       github: alicesmith
+     - name: Bob Jones
+       github: bjonesdev
+   fighters:
+     members:
+     - name: Dave Grohl
+       github: dgrohl
+     - name: Taylor Hawkins
+       github: taylorhawk1
    ```
    For the team sync, what's important is that the JSON/Yaml object maps each team
    name to an object with a `members` array of objects containing a `github`
@@ -72,7 +58,7 @@ like Issue and PR templates across the organization, that's a good choice.
        branches:
          - master
        paths:
-         - '.github/teams.json'
+         - '.github/teams.yml'
 
    jobs:
      synchronize-teams:
@@ -83,7 +69,7 @@ like Issue and PR templates across the organization, that's a good choice.
            token: "${{ secrets.ORG_ADMIN_ACCESS_TOKEN }}"
    ```
 
-Now your team can create pull requests that update the `teams.json` file
+Now your team can create pull requests that update the `teams.yml` file
 and when they are merged to `master`, the GitHub Teams in your organization
 will be created/updated according to those changes!
 
@@ -104,7 +90,7 @@ on:
     branches:
       - master
     paths:
-      - '.github/teams.json'
+      - '.github/teams.yml'
 
 jobs:
   synchronize-teams:
@@ -116,35 +102,21 @@ jobs:
         prefix-teams-with: 'foo'
 ```
 
-`.github/teams.json`:
-```json
-{
-  "designers": {
-    "description": "The amazing design team",
-    "members": [
-      {
-        "name": "Alice Smith",
-        "github": "alicesmith"
-      },
-      {
-        "name": "Bob Jones",
-        "github": "bjonesdev"
-      }
-    ]
-  },
-  "fighters": {
-    "members": [
-      {
-        "name": "Dave Grohl",
-        "github": "dgrohl"
-      },
-      {
-        "name": "Taylor Hawkins",
-        "github": "taylorhawk1"
-      }
-    ]
-  }
-}
+`.github/teams.yml`:
+```yml
+designers:
+  description: The amazing design team
+  members:
+  - name: Alice Smith
+    github: alicesmith
+  - name: Bob Jones
+    github: bjonesdev
+fighters:
+  members:
+  - name: Dave Grohl
+    github: dgrohl
+  - name: Taylor Hawkins
+    github: taylorhawk1
 ```
 This configuration would create the teams `foo designers` and `foo fighters`
 (rather than `designers` and `fighters`).
@@ -154,7 +126,7 @@ This configuration would create the teams `foo designers` and `foo fighters`
 By default, the action looks for the team data in the `.github/teams.yml` file
 in your repository. You can specify the `team-data-path` option to change this.
 (Note that you'll also want to change the `paths` configuration specified in the
-workflow definition.) For example, if you want to keep `teams.json` in the root
+workflow definition.) For example, if you want to keep `teams.yml` in the root
 of your repository, you could use:
 ```yml
 name: 'Team Sync'
@@ -163,7 +135,7 @@ on:
     branches:
       - master
     paths:
-      - 'teams.json'
+      - 'teams.yml'
 
 jobs:
   synchronize-teams:
@@ -172,7 +144,7 @@ jobs:
     - uses: rmacklin/team-sync@v0
       with:
         token: "${{ secrets.ORG_ADMIN_ACCESS_TOKEN }}"
-        team-data-path: 'teams.json'
+        team-data-path: 'teams.yml'
 ```
 
 ### The `team_sync_ignored` property
