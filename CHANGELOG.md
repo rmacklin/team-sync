@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+Support YAML teams configuration (in addition to JSON)
+
+Switch the default configuration file location from `.github/teams.json` to
+`.github/teams.yml`
+
 ## 0.4.1
 
 Fix version tags in README to clear up documentation on GitHub Marketplace
