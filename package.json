@@ -1,6 +1,6 @@
 {
   "name": "team-sync",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "private": true,
   "description": "GitHub action to synchronize GitHub Teams with the contents of a teams document",
   "main": "lib/main.js",
