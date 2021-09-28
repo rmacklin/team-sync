@@ -6,8 +6,8 @@ document in an organization repository.
 ## Usage
 
 1. Choose or create a repository in your organization for this action. If your
-organization is already using a `.github` repository to manage GitHub files
-like Issue and PR templates across the organization, that's a good choice.
+   organization is already using a `.github` repository to manage GitHub files
+   like Issue and PR templates across the organization, that's a good choice.
 
 2. Create a `.github/teams.yml` file in that repository with the following
    format:
@@ -40,8 +40,8 @@ like Issue and PR templates across the organization, that's a good choice.
 
 3. As an organization administrator, generate a [Personal Access Token] with the
    `admin:org` scope. Enable SSO for the token if necessary for your
-   organization. (The `admin:org` scope is necessary to manage GitHub Teams.)
-   If your repository is private, you also need to include the `repo` scope.
+   organization. (The `admin:org` scope is necessary to manage GitHub Teams.) If
+   your repository is private, you also need to include the `repo` scope.
 
    [Personal Access Token]: https://github.com/settings/tokens
 
@@ -69,9 +69,9 @@ like Issue and PR templates across the organization, that's a good choice.
            repo-token: "${{ secrets.ORG_ADMIN_ACCESS_TOKEN }}"
    ```
 
-Now your team can create pull requests that update the `teams.yml` file
-and when they are merged to `master`, the GitHub Teams in your organization
-will be created/updated according to those changes!
+Now your team can create pull requests that update the `teams.yml` file and when
+they are merged to `master`, the GitHub Teams in your organization will be
+created/updated according to those changes!
 
 ## Additional Configuration
 
