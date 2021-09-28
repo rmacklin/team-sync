@@ -56,7 +56,7 @@ document in an organization repository.
    on:
      push:
        branches:
-         - master
+         - main
        paths:
          - '.github/teams.yml'
 
@@ -70,7 +70,7 @@ document in an organization repository.
    ```
 
 Now your team can create pull requests that update the `teams.yml` file and when
-they are merged to `master`, the GitHub Teams in your organization will be
+they are merged to `main`, the GitHub Teams in your organization will be
 created/updated according to those changes!
 
 ## Additional Configuration
@@ -88,7 +88,7 @@ name: 'Team Sync'
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - '.github/teams.yml'
 
@@ -133,7 +133,7 @@ name: 'Team Sync'
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - 'teams.yml'
 
