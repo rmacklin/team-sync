@@ -5,7 +5,9 @@ import slugify from '@sindresorhus/slugify'
 import * as yaml from 'js-yaml'
 
 interface RepositoryMatch {
-  name: string
+  name?: string
+  regex_match?: RegExp
+  regex_ignore?: RegExp
   permission: string
 }
 
@@ -27,11 +29,11 @@ async function run(): Promise<void> {
     const teamDataPath = core.getInput('team-data-path')
     const teamNamePrefix = core.getInput('prefix-teams-with')
 
-    const client = new github.GitHub(token)
+    const client = github.getOctokit(token)
     const org = github.context.repo.owner
 
     core.debug('Fetching authenticated user')
-    const authenticatedUserResponse = await client.users.getAuthenticated()
+    const authenticatedUserResponse = await client.rest.users.getAuthenticated()
     const authenticatedUser = authenticatedUserResponse.data.login
     core.debug(`GitHub client is authenticated as ${authenticatedUser}`)
 
@@ -56,7 +58,7 @@ async function run(): Promise<void> {
 }
 
 async function synchronizeTeamData(
-  client: github.GitHub,
+  client: any,
   org: string,
   authenticatedUser: string,
   teams: Map<string, TeamData>,
@@ -73,18 +75,16 @@ async function synchronizeTeamData(
 
     const {description, members: desiredMembers, repos: desiredRepoExpressions} = teamData
 
-    const desiredRepos: RepositoryPermission[] = desiredRepoExpressions.map(m => ({name:m.name, permission:m.permission}))
-
     core.debug(`Desired team members for team slug ${teamSlug}:`)
     core.debug(JSON.stringify(desiredMembers))
 
-    const {existingTeam, existingRepos, existingMembers} = await getExistingTeamReposAndMembers(client, org, teamSlug)
+    const {existingTeam, existingRepos, existingMembers, desiredRepos} = await getExistingTeamReposAndMembers(client, org, teamSlug, desiredRepoExpressions)
 
     if (existingTeam) {
       core.debug(`Existing team members for team slug ${teamSlug}:`)
       core.debug(JSON.stringify(existingMembers))
 
-      await client.teams.updateInOrg({org, team_slug: teamSlug, name: teamName, description})
+      await client.rest.teams.updateInOrg({org, team_slug: teamSlug, name: teamName, description})
       await removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers)
       await removeFormerTeamRepos(client, org, teamSlug, existingRepos, desiredRepos)
       //await removeFormerRepositories(client, org, teamSlug, )
@@ -129,8 +129,13 @@ function parseTeamData(rawTeamConfig: string): Map<string, TeamData> {
       const teamRepos: RepositoryMatch[] = []
       if(Array.isArray(repos)) {
         for (const repo of repos) {
-          if (typeof repo.name === 'string') {
-            teamRepos.push({name: repo.name, permission: repo.permission || "write"})
+            const tt : RepositoryMatch = {permission: repo.permission || "write"}
+            if(repo.name) tt.name = repo.name
+            if(repo.regex_ignore) tt.regex_ignore = new RegExp(repo.regex_ignore)
+            if(repo.regex_match) tt.regex_match = new RegExp(repo.regex_match)
+
+          if (repo.name || repo.regex_match || repo.regex_ignore) {
+            teamRepos.push(tt)
           } else {
             throw new Error(`Invalid repo data encountered within team ${teamName}`)
           }
@@ -176,7 +181,7 @@ function prefixName(unprefixedName: string, prefix: string): string {
 }
 
 async function removeFormerTeamMembers(
-  client: github.GitHub,
+  client: any,
   org: string,
   teamSlug: string,
   existingMembers: string[],
@@ -185,7 +190,7 @@ async function removeFormerTeamMembers(
   for (const username of existingMembers) {
     if (!desiredMembers.includes(username)) {
       core.debug(`Removing ${username} from ${teamSlug}`)
-      await client.teams.removeMembershipInOrg({org, team_slug: teamSlug, username})
+      await client.rest.teams.removeMembershipInOrg({org, team_slug: teamSlug, username})
     } else {
       core.debug(`Keeping ${username} in ${teamSlug}`)
     }
@@ -199,7 +204,7 @@ function permissionTranslate(p : any) : string {
 }
 
 async function removeFormerTeamRepos(
-  client: github.GitHub,
+  client: any,
   org: string,
   teamSlug: string,
   existingRepos: RepositoryPermission[],
@@ -208,8 +213,8 @@ async function removeFormerTeamRepos(
   for (const r of existingRepos) {
     const [owner, repo] = r.name.split('/')
     if (!desiredRepos.find(a=>(a.name == r.name && a.permission == r.permission))) {
-      core.debug(`Removing ${r.name} from ${teamSlug}`)
-      await client.teams.removeRepoInOrg({org, team_slug: teamSlug, owner, repo})
+      core.debug(`Removing ${r.name}/${r.permission} from ${teamSlug}`)
+      await client.rest.teams.removeRepoInOrg({org, team_slug: teamSlug, owner, repo})
     } else {
       core.debug(`Keeping ${r.name} in ${teamSlug}`)
     }
@@ -217,7 +222,7 @@ async function removeFormerTeamRepos(
 }
 
 async function addNewTeamRepos(
-  client: github.GitHub,
+  client: any,
   org: string,
   teamSlug: string,
   existingRepos: RepositoryPermission[],
@@ -225,15 +230,15 @@ async function addNewTeamRepos(
 ): Promise<void> {
   for (const r of desiredRepos) {
     if (!existingRepos.find(a=>(a.name == r.name && a.permission == r.permission))) {
-      core.debug(`Adding ${r.name} to ${teamSlug}`)
+      core.debug(`Adding ${r.name}/${r.permission} to ${teamSlug}`)
       const [owner, repo] = r.name.split('/')
-      await client.teams.addOrUpdateRepoInOrg({org, team_slug: teamSlug, owner, repo, permission: r.permission as "pull" | "push" | "admin"})
+      await client.rest.teams.addOrUpdateRepoPermissionsInOrg({org, team_slug: teamSlug, owner, repo, permission: r.permission as "pull" | "push" | "admin"})
     }
   }
 }
 
 async function addNewTeamMembers(
-  client: github.GitHub,
+  client: any,
   org: string,
   teamSlug: string,
   existingMembers: string[],
@@ -242,20 +247,20 @@ async function addNewTeamMembers(
   for (const username of desiredMembers) {
     if (!existingMembers.includes(username)) {
       core.debug(`Adding ${username} to ${teamSlug}`)
-      await client.teams.addOrUpdateMembershipInOrg({org, team_slug: teamSlug, username})
+      await client.rest.teams.addOrUpdateMembershipInOrg({org, team_slug: teamSlug, username})
     }
   }
 }
 
 async function createTeamWithNoMembers(
-  client: github.GitHub,
+  client: any,
   org: string,
   teamName: string,
   teamSlug: string,
   authenticatedUser: string,
   description?: string
 ): Promise<void> {
-  await client.teams.create({org, name: teamName, description, privacy: 'closed'})
+  await client.rest.teams.create({org, name: teamName, description, privacy: 'closed'})
 
   core.debug(`Removing creator (${authenticatedUser}) from ${teamSlug}`)
 
@@ -266,40 +271,69 @@ async function createTeamWithNoMembers(
   })
 }
 
+//const desiredRepos: RepositoryPermission[] = desiredRepoExpressions.map(m => ({name:m.name, permission:m.permission}))
+
 async function getExistingTeamReposAndMembers(
-  client: github.GitHub,
+  client: any,
   org: string,
-  teamSlug: string
+  teamSlug: string,
+  desredRepoExpressions: RepositoryMatch[]
 ): Promise<{
   existingTeam: Octokit.TeamsGetByNameResponse | null
   existingRepos: RepositoryPermission[],
-  existingMembers: string[]
+  existingMembers: string[],
+  desiredRepos: RepositoryPermission[]
 }> {
   let existingTeam
   let existingMembers: string[] = []
   let existingRepos: RepositoryPermission[] = []
+  let desiredRepos: RepositoryPermission[] = []
 
   try {
-    const teamResponse = await client.teams.getByName({org, team_slug: teamSlug})
+    const teamResponse = await client.rest.teams.getByName({org, team_slug: teamSlug})
 
     existingTeam = teamResponse.data
 
-    const membersResponse = await client.teams.listMembersInOrg({org, team_slug: teamSlug})
+    const membersResponse = await client.rest.teams.listMembersInOrg({org, team_slug: teamSlug})
 
-    existingMembers = membersResponse.data.map(m => m.login)
+    existingMembers = membersResponse.data.map((m : any) => m.login)
 
-    const reposResponse = await client.teams.listReposInOrg({org, team_slug: teamSlug})
+    const reposResponse = await client.rest.teams.listReposInOrg({org, team_slug: teamSlug})
 
-    existingRepos = reposResponse.data.map(r => ({name: r.full_name, permission: permissionTranslate(r.permissions)}))
+    existingRepos = reposResponse.data.map((r : any) => ({name: r.full_name, permission: permissionTranslate(r.permissions)}))
+
+    const orgRepos = await client.paginate(client.rest.repos.listForOrg, {org})
+    core.debug(`Got ${orgRepos.length} repos`)
+    for(const r of orgRepos){
+      let ff = desredRepoExpressions.filter(a=>{
+        if(a.regex_ignore){
+          if(a.regex_ignore.test(r.full_name)){
+            return false
+          }
+        }
+        if(a.name == r.full_name) return true;
+        if(a.regex_match){
+          if(a.regex_match.test(r.full_name)){
+            return true
+          }
+        }
+        return false;
+      })
+      for(const f of ff){
+        desiredRepos.push({name: r.full_name, permission: f.permission})
+      }
+    }
+
   } catch (error) {
+    core.debug(`${error}`)
     existingTeam = null
   }
 
-  return {existingTeam, existingRepos, existingMembers}
+  return {existingTeam, existingRepos, desiredRepos, existingMembers}
 }
 
-async function fetchContent(client: github.GitHub, repoPath: string): Promise<string> {
-  const response = await client.repos.getContents({
+async function fetchContent(client: any, repoPath: string): Promise<string> {
+  const response = await client.rest.repos.getContent({
     owner: github.context.repo.owner,
     repo: github.context.repo.repo,
     path: repoPath,
