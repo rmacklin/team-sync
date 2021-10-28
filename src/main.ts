@@ -4,10 +4,21 @@ import {Octokit} from '@octokit/rest'
 import slugify from '@sindresorhus/slugify'
 import * as yaml from 'js-yaml'
 
+interface RepositoryMatch {
+  name: string
+  permission: string
+}
+
+interface RepositoryPermission {
+  name: string
+  permission: string
+}
+
 interface TeamData {
   members: string[]
   team_sync_ignored?: boolean
   description?: string
+  repos: RepositoryMatch[]
 }
 
 async function run(): Promise<void> {
@@ -39,8 +50,8 @@ async function run(): Promise<void> {
 
     await synchronizeTeamData(client, org, authenticatedUser, teams, teamNamePrefix)
   } catch (error) {
-    core.error(error)
-    core.setFailed(error.message)
+    core.error(error as Error)
+    core.setFailed((error as Error).message)
   }
 }
 
@@ -60,12 +71,14 @@ async function synchronizeTeamData(
       continue
     }
 
-    const {description, members: desiredMembers} = teamData
+    const {description, members: desiredMembers, repos: desiredRepoExpressions} = teamData
+
+    const desiredRepos: RepositoryPermission[] = desiredRepoExpressions.map(m => ({name:m.name, permission:m.permission}))
 
     core.debug(`Desired team members for team slug ${teamSlug}:`)
     core.debug(JSON.stringify(desiredMembers))
 
-    const {existingTeam, existingMembers} = await getExistingTeamAndMembers(client, org, teamSlug)
+    const {existingTeam, existingRepos, existingMembers} = await getExistingTeamReposAndMembers(client, org, teamSlug)
 
     if (existingTeam) {
       core.debug(`Existing team members for team slug ${teamSlug}:`)
@@ -73,11 +86,14 @@ async function synchronizeTeamData(
 
       await client.teams.updateInOrg({org, team_slug: teamSlug, name: teamName, description})
       await removeFormerTeamMembers(client, org, teamSlug, existingMembers, desiredMembers)
+      await removeFormerTeamRepos(client, org, teamSlug, existingRepos, desiredRepos)
+      //await removeFormerRepositories(client, org, teamSlug, )
     } else {
       core.debug(`No team was found in ${org} with slug ${teamSlug}. Creating one.`)
       await createTeamWithNoMembers(client, org, teamName, teamSlug, authenticatedUser, description)
     }
 
+    await addNewTeamRepos(client, org, teamSlug, existingRepos, desiredRepos)
     await addNewTeamMembers(client, org, teamSlug, existingMembers, desiredMembers)
   }
 }
@@ -97,11 +113,10 @@ function parseTeamData(rawTeamConfig: string): Map<string, TeamData> {
     const teamData = teamsData[teamName]
 
     if (teamData.members) {
-      const {members} = teamData
+      const {members, repos} = teamData
 
+      const teamGitHubUsernames: string[] = []
       if (Array.isArray(members)) {
-        const teamGitHubUsernames: string[] = []
-
         for (const member of members) {
           if (typeof member.github === 'string') {
             teamGitHubUsernames.push(member.github)
@@ -109,37 +124,46 @@ function parseTeamData(rawTeamConfig: string): Map<string, TeamData> {
             throw new Error(`Invalid member data encountered within team ${teamName}`)
           }
         }
-
-        const parsedTeamData: TeamData = {members: teamGitHubUsernames}
-
-        if ('description' in teamData) {
-          const {description} = teamData
-
-          if (typeof description === 'string') {
-            parsedTeamData.description = description
-          } else {
-            throw new Error(`Invalid description property for team ${teamName} (expected a string)`)
-          }
-        }
-
-        if ('team_sync_ignored' in teamData) {
-          const {team_sync_ignored} = teamData
-
-          if (typeof team_sync_ignored === 'boolean') {
-            parsedTeamData.team_sync_ignored = team_sync_ignored
-          } else {
-            throw new Error(
-              `Invalid team_sync_ignored property for team ${teamName} (expected a boolean)`
-            )
-          }
-        }
-
-        teams.set(teamName, parsedTeamData)
-        continue
       }
-    }
 
-    throw unexpectedFormatError
+      const teamRepos: RepositoryMatch[] = []
+      if(Array.isArray(repos)) {
+        for (const repo of repos) {
+          if (typeof repo.name === 'string') {
+            teamRepos.push({name: repo.name, permission: repo.permission || "write"})
+          } else {
+            throw new Error(`Invalid repo data encountered within team ${teamName}`)
+          }
+        }
+      }
+
+      const parsedTeamData: TeamData = {members: teamGitHubUsernames, repos: teamRepos}
+
+      if ('description' in teamData) {
+        const {description} = teamData
+
+        if (typeof description === 'string') {
+          parsedTeamData.description = description
+        } else {
+          throw new Error(`Invalid description property for team ${teamName} (expected a string)`)
+        }
+      }
+
+      if ('team_sync_ignored' in teamData) {
+        const {team_sync_ignored} = teamData
+
+        if (typeof team_sync_ignored === 'boolean') {
+          parsedTeamData.team_sync_ignored = team_sync_ignored
+        } else {
+          throw new Error(
+            `Invalid team_sync_ignored property for team ${teamName} (expected a boolean)`
+          )
+        }
+      }
+
+      teams.set(teamName, parsedTeamData)
+      continue
+    }
   }
 
   return teams
@@ -164,6 +188,46 @@ async function removeFormerTeamMembers(
       await client.teams.removeMembershipInOrg({org, team_slug: teamSlug, username})
     } else {
       core.debug(`Keeping ${username} in ${teamSlug}`)
+    }
+  }
+}
+
+function permissionTranslate(p : any) : string {
+  if(p.admin) return "admin"
+  if(p.push) return "push"
+  return "pull"
+}
+
+async function removeFormerTeamRepos(
+  client: github.GitHub,
+  org: string,
+  teamSlug: string,
+  existingRepos: RepositoryPermission[],
+  desiredRepos: RepositoryPermission[]
+): Promise<void> {
+  for (const r of existingRepos) {
+    const [owner, repo] = r.name.split('/')
+    if (!desiredRepos.find(a=>(a.name == r.name && a.permission == r.permission))) {
+      core.debug(`Removing ${r.name} from ${teamSlug}`)
+      await client.teams.removeRepoInOrg({org, team_slug: teamSlug, owner, repo})
+    } else {
+      core.debug(`Keeping ${r.name} in ${teamSlug}`)
+    }
+  }
+}
+
+async function addNewTeamRepos(
+  client: github.GitHub,
+  org: string,
+  teamSlug: string,
+  existingRepos: RepositoryPermission[],
+  desiredRepos: RepositoryPermission[]
+): Promise<void> {
+  for (const r of desiredRepos) {
+    if (!existingRepos.find(a=>(a.name == r.name && a.permission == r.permission))) {
+      core.debug(`Adding ${r.name} to ${teamSlug}`)
+      const [owner, repo] = r.name.split('/')
+      await client.teams.addOrUpdateRepoInOrg({org, team_slug: teamSlug, owner, repo, permission: r.permission as "pull" | "push" | "admin"})
     }
   }
 }
@@ -202,16 +266,18 @@ async function createTeamWithNoMembers(
   })
 }
 
-async function getExistingTeamAndMembers(
+async function getExistingTeamReposAndMembers(
   client: github.GitHub,
   org: string,
   teamSlug: string
 ): Promise<{
   existingTeam: Octokit.TeamsGetByNameResponse | null
+  existingRepos: RepositoryPermission[],
   existingMembers: string[]
 }> {
   let existingTeam
   let existingMembers: string[] = []
+  let existingRepos: RepositoryPermission[] = []
 
   try {
     const teamResponse = await client.teams.getByName({org, team_slug: teamSlug})
@@ -221,11 +287,15 @@ async function getExistingTeamAndMembers(
     const membersResponse = await client.teams.listMembersInOrg({org, team_slug: teamSlug})
 
     existingMembers = membersResponse.data.map(m => m.login)
+
+    const reposResponse = await client.teams.listReposInOrg({org, team_slug: teamSlug})
+
+    existingRepos = reposResponse.data.map(r => ({name: r.full_name, permission: permissionTranslate(r.permissions)}))
   } catch (error) {
     existingTeam = null
   }
 
-  return {existingTeam, existingMembers}
+  return {existingTeam, existingRepos, existingMembers}
 }
 
 async function fetchContent(client: github.GitHub, repoPath: string): Promise<string> {
