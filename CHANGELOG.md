@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0
+
+Support GitHub Enterprise Server deployments
+
 ## 0.5.0
 
 Support YAML teams configuration (in addition to JSON)
